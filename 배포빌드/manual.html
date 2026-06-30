@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChurchInterpreter 사용설명서</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+      font-size: 14px; line-height: 1.8; color: #222;
+      background: #fff; max-width: 860px; margin: 0 auto; padding: 40px 32px;
+    }
+    h1 { font-size: 26px; color: #1a3a6a; border-bottom: 3px solid #1a3a6a; padding-bottom: 10px; margin-bottom: 6px; }
+    .subtitle { color: #666; font-size: 13px; margin-bottom: 36px; }
+    h2 { font-size: 18px; color: #1a3a6a; margin: 36px 0 12px; padding-left: 10px; border-left: 4px solid #1a3a6a; }
+    h3 { font-size: 14px; font-weight: bold; color: #333; margin: 20px 0 8px; }
+    p { margin-bottom: 10px; }
+    ul, ol { margin: 8px 0 12px 22px; }
+    li { margin-bottom: 5px; }
+    .step {
+      background: #f4f8ff; border: 1px solid #c8d8f0; border-radius: 8px;
+      padding: 16px 20px; margin: 14px 0;
+    }
+    .step-num {
+      display: inline-block; background: #1a3a6a; color: #fff;
+      border-radius: 50%; width: 24px; height: 24px; line-height: 24px;
+      text-align: center; font-size: 12px; font-weight: bold; margin-right: 8px;
+    }
+    .step-title { font-weight: bold; font-size: 14px; }
+    .warn {
+      background: #fff8e1; border-left: 4px solid #f0a500;
+      padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; font-size: 13px;
+    }
+    .tip {
+      background: #e8f5e9; border-left: 4px solid #388e3c;
+      padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; font-size: 13px;
+    }
+    code {
+      background: #f0f0f0; padding: 2px 6px; border-radius: 3px;
+      font-family: Consolas, monospace; font-size: 13px;
+    }
+    .url { color: #1a5db8; word-break: break-all; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+    th { background: #1a3a6a; color: #fff; padding: 8px 12px; text-align: left; }
+    td { border: 1px solid #ddd; padding: 8px 12px; }
+    tr:nth-child(even) td { background: #f8f9fc; }
+    .page-break { page-break-after: always; }
+    .cover {
+      text-align: center; padding: 60px 0 40px;
+    }
+    .cover .logo { font-size: 48px; margin-bottom: 16px; }
+    .cover h1 { font-size: 32px; border: none; display: inline-block; }
+    .cover .ver { color: #888; font-size: 13px; margin-top: 8px; }
+    .toc { background: #f8f9fc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px 24px; margin: 24px 0; }
+    .toc h3 { margin-top: 0; color: #1a3a6a; }
+    .toc ol { margin-left: 18px; }
+    .toc li { margin-bottom: 4px; color: #1a5db8; }
+    @media print {
+      body { padding: 20px; font-size: 13px; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 표지 -->
+<div class="cover">
+  <div class="logo">⛪</div>
+  <h1>ChurchInterpreter</h1>
+  <p style="font-size:16px;color:#555;margin-top:8px">실시간 설교 동시통역 프로그램</p>
+  <p class="ver">사용설명서 v1.0</p>
+</div>
+
+<div class="toc">
+  <h3>목차</h3>
+  <ol>
+    <li>프로그램 소개</li>
+    <li>설치 방법</li>
+    <li>API 키 발급 (최초 1회)</li>
+    <li>처음 실행 — 설정 화면</li>
+    <li>매주 사용 방법</li>
+    <li>화면 구성 안내</li>
+    <li>자주 묻는 질문</li>
+  </ol>
+</div>
+
+<div class="no-print" style="text-align:right;margin-bottom:24px">
+  <button onclick="window.print()" style="padding:8px 18px;background:#1a3a6a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 PDF로 저장 / 인쇄</button>
+</div>
+
+<div class="page-break"></div>
+
+<!-- 1. 소개 -->
+<h2>1. 프로그램 소개</h2>
+<p>ChurchInterpreter는 설교자의 한국어 음성을 실시간으로 영어(또는 다른 언어)로 번역하여
+빔프로젝터와 교인 스마트폰에 동시에 자막으로 보여주는 프로그램입니다.</p>
+
+<table>
+  <tr><th>기능</th><th>설명</th></tr>
+  <tr><td>실시간 통역</td><td>설교자 말이 끝나는 즉시 번역 자막 표시</td></tr>
+  <tr><td>빔프로젝터 송출</td><td>글자 크기·색상 조절 가능한 전용 화면</td></tr>
+  <tr><td>셀폰 접속</td><td>QR코드로 교인 스마트폰에서 자막 확인</td></tr>
+  <tr><td>설교 원고 활용</td><td>PDF/Word 원고 업로드 시 번역 정확도 향상</td></tr>
+  <tr><td>다국어 지원</td><td>영어, 일본어, 중국어, 스페인어 등</td></tr>
+</table>
+
+<!-- 2. 설치 -->
+<h2>2. 설치 방법</h2>
+
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">설치 파일 실행</span>
+  <p style="margin-top:8px"><code>ChurchInterpreter_Setup.exe</code>를 더블클릭하여 실행합니다.</p>
+  <p>"Windows의 PC 보호" 경고가 뜨면 <strong>추가 정보 → 실행</strong>을 클릭하세요.</p>
+</div>
+
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">설치 경로 선택</span>
+  <p style="margin-top:8px">기본 경로(<code>C:\Program Files\ChurchInterpreter</code>)를 그대로 사용하거나 원하는 위치로 변경 후 <strong>설치</strong>를 클릭합니다.</p>
+</div>
+
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">설치 완료</span>
+  <p style="margin-top:8px">바탕화면에 <strong>ChurchInterpreter</strong> 아이콘이 생성됩니다.</p>
+</div>
+
+<div class="warn">⚠ 설치 후 처음 실행 시 API 키를 입력해야 합니다. 아래 3장을 먼저 읽고 키를 준비해 두세요.</div>
+
+<!-- 3. API 키 발급 -->
+<h2>3. API 키 발급 (최초 1회)</h2>
+<p>이 프로그램은 두 가지 외부 서비스를 사용합니다. 각 서비스에서 키를 발급받아야 합니다.</p>
+
+<h3>① Anthropic Claude API 키 (번역용)</h3>
+
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">사이트 접속 및 회원가입</span>
+  <p style="margin-top:8px">
+    <span class="url">https://console.anthropic.com</span> 접속<br>
+    오른쪽 위 <strong>Sign Up</strong> 클릭 → 이메일 주소 입력 → 인증 메일 확인 → 비밀번호 설정<br>
+    이미 계정이 있으면 <strong>Log In</strong>으로 로그인
+  </p>
+</div>
+
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">결제 수단 등록</span>
+  <p style="margin-top:8px">
+    로그인 후 왼쪽 메뉴에서 <strong>Billing</strong> 클릭<br>
+    → <strong>Add payment method</strong> → 신용카드 번호·유효기간·CVC 입력 후 저장<br>
+    → <strong>Buy credits</strong> 클릭 → 금액 입력 후 결제
+  </p>
+  <p style="margin-top:6px;color:#888;font-size:12px">💡 처음에는 $5~10 정도 충전하면 충분합니다. 월 1회 1시간 예배 기준 약 $2~5 사용됩니다.</p>
+</div>
+
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">API 키 생성</span>
+  <p style="margin-top:8px">
+    왼쪽 메뉴 <strong>API Keys</strong> 클릭<br>
+    → 오른쪽 위 <strong>+ Create Key</strong> 클릭<br>
+    → 키 이름 입력 (예: <code>church-interpreter</code>) → <strong>Create Key</strong> 클릭<br>
+    → 화면에 나타난 키(<code>sk-ant-api03-...</code>)를 <strong>반드시 복사</strong>해 메모장에 저장<br>
+    (창을 닫으면 다시 볼 수 없습니다)
+  </p>
+</div>
+
+<div class="warn">⚠ API 키는 비밀번호와 같습니다. 타인에게 공유하거나 이메일로 보내지 마세요. 유출 시 즉시 해당 키를 삭제하고 새로 발급하세요.</div>
+
+<h3>② Google Cloud 음성인식 키</h3>
+
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">Google Cloud 접속 및 프로젝트 생성</span>
+  <p style="margin-top:8px">
+    <span class="url">https://console.cloud.google.com</span> 접속 (Google 계정으로 로그인)<br>
+    → 상단 바의 프로젝트 선택 드롭다운 클릭 (처음엔 "프로젝트 선택" 또는 기존 프로젝트명 표시)<br>
+    → 팝업 오른쪽 위 <strong>새 프로젝트</strong> 클릭<br>
+    → 프로젝트 이름 입력 (예: <code>church-interpreter</code>) → <strong>만들기</strong> 클릭<br>
+    → 생성 완료 후 해당 프로젝트가 선택된 상태인지 확인
+  </p>
+</div>
+
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">결제 계정 연결</span>
+  <p style="margin-top:8px">
+    왼쪽 상단 메뉴(☰) → <strong>결제</strong> 클릭<br>
+    → <strong>결제 계정 연결</strong> → 신용카드 등록<br>
+    (월 사용량이 일정 한도 이하면 무료입니다. 월 60분 이내 음성인식은 무료 범위 내에 들어올 수 있습니다.)
+  </p>
+</div>
+
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">Speech-to-Text API 활성화</span>
+  <p style="margin-top:8px">
+    상단 검색창에 <strong>Cloud Speech-to-Text API</strong> 입력 후 검색 결과 클릭<br>
+    → 파란 <strong>사용</strong> 버튼 클릭 (이미 활성화된 경우 "API 사용 설정됨" 표시)
+  </p>
+</div>
+
+<div class="step">
+  <span class="step-num">4</span><span class="step-title">서비스 계정 만들기</span>
+  <p style="margin-top:8px">
+    왼쪽 상단 메뉴(☰) → <strong>IAM 및 관리자</strong> → <strong>서비스 계정</strong> 클릭<br>
+    → 상단 <strong>+ 서비스 계정 만들기</strong> 클릭<br>
+    → 서비스 계정 이름 입력 (예: <code>church-stt</code>) → <strong>만들고 계속하기</strong> 클릭<br>
+    → 역할 선택: <strong>Cloud Speech 클라이언트</strong> 검색 후 선택 → <strong>계속</strong> → <strong>완료</strong>
+  </p>
+</div>
+
+<div class="step">
+  <span class="step-num">5</span><span class="step-title">JSON 키 파일 다운로드</span>
+  <p style="margin-top:8px">
+    서비스 계정 목록에서 방금 만든 계정(<code>church-stt@...</code>) 클릭<br>
+    → 상단 탭에서 <strong>키</strong> 클릭<br>
+    → <strong>키 추가</strong> → <strong>새 키 만들기</strong> 클릭<br>
+    → 키 유형 <strong>JSON</strong> 선택 → <strong>만들기</strong> 클릭<br>
+    → <code>.json</code> 파일이 자동으로 다운로드됩니다 — 이 파일을 보관합니다
+  </p>
+</div>
+
+<div class="warn">⚠ JSON 키 파일은 비밀번호와 같습니다. 이메일로 보내거나 외부에 공유하지 마세요. 분실 시 기존 키를 삭제하고 새로 발급하면 됩니다.</div>
+
+<h3>③ ngrok 계정 (셀폰 접속용)</h3>
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">ngrok 가입</span>
+  <p style="margin-top:8px"><span class="url">https://dashboard.ngrok.com</span> → Sign Up (무료)</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">Authtoken 복사</span>
+  <p style="margin-top:8px">로그인 후 <strong>Getting Started → Your Authtoken</strong>에서 토큰 복사</p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">(선택) 고정 도메인 발급</span>
+  <p style="margin-top:8px"><strong>Domains</strong> 메뉴 → <strong>New Domain</strong><br>
+  무료 고정 도메인 1개 발급 (매주 같은 QR코드 재사용 가능)</p>
+</div>
+
+<div class="page-break"></div>
+
+<!-- 4. 처음 실행 -->
+<h2>4. 처음 실행 — 설정 화면</h2>
+
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">프로그램 실행</span>
+  <p style="margin-top:8px">바탕화면 <strong>ChurchInterpreter</strong> 더블클릭<br>
+  검은 콘솔 창이 열리면서 서버가 시작됩니다. (닫지 마세요)</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">설정 화면 열기</span>
+  <p style="margin-top:8px">자동으로 브라우저가 열리거나, 주소창에 입력:<br>
+  <code>http://localhost:5000/setup</code></p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">Claude API 키 입력</span>
+  <p style="margin-top:8px">3장에서 복사한 <code>sk-ant-...</code> 키를 입력 후 <strong>연결 테스트</strong></p>
+</div>
+<div class="step">
+  <span class="step-num">4</span><span class="step-title">Google 키 파일 업로드</span>
+  <p style="margin-top:8px"><strong>파일 선택</strong> 버튼으로 다운로드한 <code>.json</code> 파일 선택 후 <strong>연결 테스트</strong></p>
+</div>
+<div class="step">
+  <span class="step-num">5</span><span class="step-title">ngrok 설정</span>
+  <p style="margin-top:8px">Authtoken 입력, 고정 도메인이 있으면 입력</p>
+</div>
+<div class="step">
+  <span class="step-num">6</span><span class="step-title">설정 저장</span>
+  <p style="margin-top:8px"><strong>설정 저장</strong> 클릭 → <strong>운영자 대시보드 열기</strong> 클릭</p>
+</div>
+
+<div class="tip">✓ 설정은 프로그램 폴더의 <code>.env</code> 파일에 저장됩니다. 다음 실행부터는 자동 적용됩니다.</div>
+
+<!-- 5. 매주 사용 -->
+<h2>5. 매주 사용 방법</h2>
+
+<table>
+  <tr><th>순서</th><th>할 일</th><th>방법</th></tr>
+  <tr><td>예배 전</td><td>프로그램 실행</td><td>바탕화면 ChurchInterpreter 더블클릭</td></tr>
+  <tr><td>예배 전</td><td>운영자 대시보드 열기</td><td><code>http://localhost:5000/operator</code></td></tr>
+  <tr><td>예배 전</td><td>설교 원고 업로드 (선택)</td><td>대시보드 좌측 "원고 업로드" → PDF/Word 선택</td></tr>
+  <tr><td>예배 전</td><td>빔프로젝터 화면 열기</td><td><code>http://localhost:5000</code> → 더블클릭으로 전체화면</td></tr>
+  <tr><td>예배 전</td><td>셀폰 QR 안내</td><td>대시보드 우측 QR코드를 주보에 인쇄하거나 화면에 표시</td></tr>
+  <tr><td>예배 시작</td><td>마이크 켜기</td><td>대시보드 "🎤 마이크 켜기" 버튼</td></tr>
+  <tr><td>예배 중</td><td>자막 확인</td><td>빔프로젝터 화면 및 셀폰에서 실시간 자막 확인</td></tr>
+  <tr><td>예배 후</td><td>마이크 끄기</td><td>대시보드 "⏹ 마이크 끄기" 버튼</td></tr>
+  <tr><td>예배 후</td><td>프로그램 종료</td><td>콘솔 창 닫기 또는 Ctrl+C</td></tr>
+</table>
+
+<!-- 6. 화면 구성 -->
+<h2>6. 화면 구성 안내</h2>
+
+<h3>운영자 대시보드 (<code>/operator</code>)</h3>
+<ul>
+  <li><strong>마이크 켜기/끄기</strong> — 통역 시작·중지</li>
+  <li><strong>언어 선택</strong> — 원본/번역 언어 변경</li>
+  <li><strong>원고 업로드</strong> — PDF 또는 Word 파일로 번역 정확도 향상</li>
+  <li><strong>화면 설정</strong> — 글자 크기·색상·배경색 조절 (빔프로젝터에 실시간 반영)</li>
+  <li><strong>QR코드</strong> — 교인 셀폰 접속용 주소</li>
+</ul>
+
+<h3>빔프로젝터 화면 (<code>/</code>)</h3>
+<ul>
+  <li>더블클릭 또는 F11 — 전체화면 전환</li>
+  <li>자막은 아래에서 위로 쌓이며 화면이 넘치면 위에서부터 사라짐</li>
+</ul>
+
+<h3>교인 셀폰 화면 (<code>/mobile</code>)</h3>
+<ul>
+  <li>QR코드 스캔으로 접속</li>
+  <li>화면이 꺼지지 않도록 자동 잠금 방지 기능 포함</li>
+</ul>
+
+<!-- 7. FAQ -->
+<h2>7. 자주 묻는 질문</h2>
+
+<h3>Q. 번역이 너무 느려요</h3>
+<p>인터넷 연결 속도와 API 서버 상태에 따라 0.5~3초 지연이 발생할 수 있습니다. 유선 인터넷 사용을 권장합니다.</p>
+
+<h3>Q. 고유명사(사람 이름, 성경 지명)가 잘못 인식돼요</h3>
+<p>대시보드 → 용어집 업로드에서 교회 특유의 고유명사를 추가하면 인식 정확도가 올라갑니다.</p>
+
+<h3>Q. 셀폰에서 QR을 찍었는데 접속이 안 돼요</h3>
+<p>ngrok 설정이 완료되었는지 확인하세요. 대시보드의 QR코드 영역에 주소가 표시되어 있어야 합니다.</p>
+
+<h3>Q. 검은 콘솔 창을 실수로 닫았어요</h3>
+<p>바탕화면 아이콘을 다시 더블클릭해 프로그램을 재시작하세요.</p>
+
+<h3>Q. API 키를 바꾸고 싶어요</h3>
+<p>브라우저에서 <code>http://localhost:5000/setup</code>에 접속해 새 키를 입력 후 저장합니다.</p>
+
+<h3>Q. 번역 비용이 얼마나 들어요?</h3>
+<p>월 1회 1시간 예배 기준 약 $2~5 수준입니다. Anthropic 콘솔에서 실시간 사용량을 확인할 수 있습니다.</p>
+
+<hr style="margin:40px 0;border:none;border-top:1px solid #ddd">
+<p style="text-align:center;color:#aaa;font-size:12px">ChurchInterpreter v1.0 — 문의: 개발자에게 연락</p>
+
+</body>
+</html>

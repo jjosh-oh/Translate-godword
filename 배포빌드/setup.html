@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChurchInterpreter 설정</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0f0f0f; color: #e0e0e0;
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px;
+      padding: 36px 40px; width: 100%; max-width: 540px;
+    }
+    .logo {
+      text-align: center; margin-bottom: 28px;
+    }
+    .logo h1 { font-size: 22px; color: #fff; margin-bottom: 4px; }
+    .logo p { font-size: 13px; color: #666; }
+
+    .section { margin-bottom: 28px; }
+    .section-title {
+      font-size: 13px; font-weight: bold; color: #aaa;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #2a2a2a;
+    }
+
+    label { display: block; font-size: 13px; color: #bbb; margin-bottom: 6px; }
+    label span { color: #666; font-weight: normal; }
+
+    input[type="text"], input[type="password"] {
+      width: 100%; background: #111; border: 1px solid #333;
+      border-radius: 7px; padding: 10px 13px; font-size: 13px; color: #e0e0e0;
+      outline: none; transition: border-color 0.2s;
+    }
+    input:focus { border-color: #555; }
+    input.ok { border-color: #2d7a2d; }
+    input.err { border-color: #7a2d2d; }
+
+    .field { margin-bottom: 16px; }
+    .hint { font-size: 11px; color: #555; margin-top: 5px; }
+    .hint a { color: #5b8fd9; text-decoration: none; }
+
+    .file-row { display: flex; gap: 8px; align-items: center; }
+    .file-row input[type="text"] { flex: 1; }
+    .file-btn {
+      padding: 10px 14px; background: #252525; border: 1px solid #333;
+      border-radius: 7px; font-size: 12px; color: #bbb; cursor: pointer;
+      white-space: nowrap; transition: background 0.15s;
+    }
+    .file-btn:hover { background: #2e2e2e; }
+    #file-input { display: none; }
+
+    .test-btn {
+      width: 100%; margin-top: 4px; padding: 9px; border: 1px solid #333;
+      border-radius: 7px; background: #1e1e1e; color: #aaa; font-size: 12px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .test-btn:hover { background: #252525; }
+
+    .test-result {
+      margin-top: 8px; font-size: 12px; padding: 8px 12px;
+      border-radius: 6px; display: none;
+    }
+    .test-result.ok { background: #0d2a0d; color: #5cb85c; border: 1px solid #1a4a1a; }
+    .test-result.err { background: #2a0d0d; color: #e07070; border: 1px solid #4a1a1a; }
+
+    .save-btn {
+      width: 100%; padding: 13px; background: #2d5a9e; border: none;
+      border-radius: 8px; color: #fff; font-size: 15px; font-weight: bold;
+      cursor: pointer; transition: background 0.2s; margin-top: 4px;
+    }
+    .save-btn:hover { background: #3568b8; }
+    .save-btn:disabled { background: #1a2a3a; color: #555; cursor: default; }
+
+    .status-msg {
+      margin-top: 14px; font-size: 13px; text-align: center; min-height: 20px;
+    }
+    .status-msg.ok { color: #5cb85c; }
+    .status-msg.err { color: #e07070; }
+
+    .already-set {
+      font-size: 11px; color: #2d7a2d; margin-top: 5px;
+    }
+    .goto-op {
+      display: block; text-align: center; margin-top: 20px;
+      font-size: 13px; color: #5b8fd9; text-decoration: none;
+    }
+    .goto-op:hover { text-decoration: underline; }
+
+    .step-badge {
+      display: inline-block; background: #252525; color: #888;
+      border-radius: 20px; font-size: 11px; padding: 2px 10px; margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <h1>⛪ ChurchInterpreter</h1>
+    <p>처음 사용 시 API 키를 설정해 주세요</p>
+  </div>
+
+  <!-- 1. Anthropic API 키 -->
+  <div class="section">
+    <div class="section-title">1. Claude API 키 <span class="step-badge">Anthropic</span></div>
+
+    <div class="field">
+      <label>API 키 <span>(sk-ant-... 형식)</span></label>
+      <input type="password" id="anthropic-key" placeholder="sk-ant-api03-..." autocomplete="off">
+      <div class="hint">
+        발급: <a href="#" onclick="openLink('https://console.anthropic.com/settings/keys'); return false;">console.anthropic.com → API Keys</a>
+      </div>
+      <div id="anthropic-already" class="already-set" style="display:none">✓ 이미 저장된 키가 있습니다 (변경하려면 새 키 입력)</div>
+    </div>
+    <button class="test-btn" onclick="testAnthropic()">연결 테스트</button>
+    <div class="test-result" id="anthropic-result"></div>
+  </div>
+
+  <!-- 2. Google Cloud 인증 -->
+  <div class="section">
+    <div class="section-title">2. Google Cloud 인증 <span class="step-badge">Speech-to-Text</span></div>
+
+    <div class="field">
+      <label>서비스 계정 JSON 키 파일</label>
+      <div class="file-row">
+        <input type="text" id="google-key-path" placeholder="google-key.json 파일 선택..." readonly>
+        <button class="file-btn" onclick="document.getElementById('file-input').click()">파일 선택</button>
+      </div>
+      <input type="file" id="file-input" accept=".json" onchange="handleFileSelect(this)">
+      <div class="hint">
+        발급: <a href="#" onclick="openLink('https://console.cloud.google.com/iam-admin/serviceaccounts'); return false;">console.cloud.google.com → 서비스 계정 → 키 생성</a>
+      </div>
+      <div id="google-already" class="already-set" style="display:none">✓ 이미 google-key.json이 있습니다 (교체하려면 새 파일 선택)</div>
+    </div>
+    <button class="test-btn" onclick="testGoogle()">연결 테스트</button>
+    <div class="test-result" id="google-result"></div>
+  </div>
+
+  <!-- 3. ngrok (셀폰 연결) -->
+  <div class="section">
+    <div class="section-title">3. ngrok 터널 <span class="step-badge">셀폰 QR</span></div>
+    <p style="font-size:12px;color:#666;margin-bottom:14px;line-height:1.7">
+      교인 셀폰이 QR코드로 접속하려면 ngrok이 필요합니다.<br>
+      무료 계정으로 발급한 Authtoken을 입력해 주세요.
+    </p>
+
+    <div class="field">
+      <label>Authtoken <span>(ngrok 대시보드에서 복사)</span></label>
+      <input type="password" id="ngrok-token" placeholder="2abc...XYZ" autocomplete="off">
+      <div class="hint">
+        발급: <a href="#" onclick="openLink('https://dashboard.ngrok.com/get-started/your-authtoken'); return false;">dashboard.ngrok.com → Your Authtoken</a>
+      </div>
+      <div id="ngrok-already" class="already-set" style="display:none">✓ 이미 Authtoken이 저장되어 있습니다</div>
+    </div>
+
+    <div class="field">
+      <label>고정 도메인 <span>(선택 — 매주 같은 QR 사용 시)</span></label>
+      <input type="text" id="ngrok-domain" placeholder="예: my-church.ngrok-free.app">
+      <div class="hint">
+        ngrok 대시보드 → Domains → 무료 도메인 1개 발급 후 입력 (비워도 됨)
+      </div>
+    </div>
+
+    <div id="ngrok-status" class="test-result" style="display:none"></div>
+  </div>
+
+  <!-- 저장 -->
+  <button class="save-btn" id="save-btn" onclick="saveSettings()">설정 저장</button>
+  <div class="status-msg" id="status-msg"></div>
+  <a href="/operator" class="goto-op" id="goto-op" style="display:none">→ 운영자 대시보드 열기</a>
+</div>
+
+<script>
+  // 파일 선택 처리
+  let selectedFile = null;
+  function handleFileSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+    selectedFile = file;
+    document.getElementById("google-key-path").value = file.name;
+  }
+
+  // 앱이 직접 링크 열기 (Electron 환경 대비, 웹 브라우저에선 그냥 window.open)
+  function openLink(url) {
+    window.open(url, "_blank");
+  }
+
+  // 기존 저장 설정 확인
+  fetch("/setup-status").then(r => r.json()).then(d => {
+    if (d.has_anthropic_key) document.getElementById("anthropic-already").style.display = "block";
+    if (d.has_google_key) document.getElementById("google-already").style.display = "block";
+    if (d.has_ngrok_token) document.getElementById("ngrok-already").style.display = "block";
+    if (d.ngrok_domain) document.getElementById("ngrok-domain").value = d.ngrok_domain;
+    if (d.ngrok_url) {
+      const el = document.getElementById("ngrok-status");
+      el.className = "test-result ok"; el.style.display = "block";
+      el.textContent = "✓ 터널 연결됨: " + d.ngrok_url;
+    }
+    if (d.has_anthropic_key && d.has_google_key) {
+      document.getElementById("goto-op").style.display = "block";
+    }
+  }).catch(() => {});
+
+  // Anthropic 연결 테스트
+  async function testAnthropic() {
+    const key = document.getElementById("anthropic-key").value.trim();
+    const el = document.getElementById("anthropic-result");
+    el.className = "test-result"; el.style.display = "block";
+    el.textContent = "테스트 중...";
+    try {
+      const r = await fetch("/setup-test-anthropic", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ api_key: key })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        el.className = "test-result ok"; el.textContent = "✓ 연결 성공 — " + (d.model || "Claude");
+      } else {
+        el.className = "test-result err"; el.textContent = "✗ 실패: " + d.error;
+      }
+    } catch(e) {
+      el.className = "test-result err"; el.textContent = "✗ 오류: " + e.message;
+    }
+  }
+
+  // Google 연결 테스트
+  async function testGoogle() {
+    const el = document.getElementById("google-result");
+    el.className = "test-result"; el.style.display = "block";
+    el.textContent = "테스트 중...";
+
+    if (!selectedFile && !document.getElementById("google-already").style.display !== "none") {
+      el.className = "test-result err"; el.textContent = "✗ 파일을 먼저 선택해 주세요";
+      return;
+    }
+
+    // 파일이 선택된 경우 먼저 업로드 후 테스트
+    try {
+      if (selectedFile) {
+        const fd = new FormData();
+        fd.append("file", selectedFile);
+        const up = await fetch("/setup-upload-google-key", { method: "POST", body: fd });
+        const ud = await up.json();
+        if (!ud.ok) { el.className = "test-result err"; el.textContent = "✗ 업로드 실패: " + ud.error; return; }
+      }
+      const r = await fetch("/setup-test-google", { method: "POST" });
+      const d = await r.json();
+      if (d.ok) {
+        el.className = "test-result ok"; el.textContent = "✓ Google Speech-to-Text 연결 성공";
+      } else {
+        el.className = "test-result err"; el.textContent = "✗ 실패: " + d.error;
+      }
+    } catch(e) {
+      el.className = "test-result err"; el.textContent = "✗ 오류: " + e.message;
+    }
+  }
+
+  // 설정 저장
+  async function saveSettings() {
+    const anthropicKey = document.getElementById("anthropic-key").value.trim();
+    const ngrokToken   = document.getElementById("ngrok-token").value.trim();
+    const ngrokDomain  = document.getElementById("ngrok-domain").value.trim();
+    const btn = document.getElementById("save-btn");
+    const msg = document.getElementById("status-msg");
+
+    btn.disabled = true; btn.textContent = "저장 중...";
+    msg.className = "status-msg"; msg.textContent = "";
+
+    try {
+      // 1) Google 키 파일 업로드 (선택된 경우)
+      if (selectedFile) {
+        const fd = new FormData();
+        fd.append("file", selectedFile);
+        const up = await fetch("/setup-upload-google-key", { method: "POST", body: fd });
+        const ud = await up.json();
+        if (!ud.ok) {
+          msg.className = "status-msg err"; msg.textContent = "Google 키 저장 실패: " + ud.error;
+          btn.disabled = false; btn.textContent = "설정 저장"; return;
+        }
+      }
+
+      // 2) Anthropic 키 + ngrok 설정 한 번에 저장
+      if (anthropicKey || ngrokToken || ngrokDomain) {
+        const r = await fetch("/setup-save", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ anthropic_key: anthropicKey, ngrok_token: ngrokToken, ngrok_domain: ngrokDomain })
+        });
+        const d = await r.json();
+        if (!d.ok) {
+          msg.className = "status-msg err"; msg.textContent = "저장 실패: " + d.error;
+          btn.disabled = false; btn.textContent = "설정 저장"; return;
+        }
+      }
+
+      msg.className = "status-msg ok";
+      msg.textContent = ngrokToken
+        ? "✓ 저장 완료! ngrok 터널 연결 중... 잠시 후 운영자 대시보드에서 QR코드를 확인하세요."
+        : "✓ 저장 완료! 이제 통역 기능을 사용할 수 있습니다.";
+      document.getElementById("goto-op").style.display = "block";
+
+      // ngrok 토큰을 저장했으면 10초 후 터널 URL 갱신
+      if (ngrokToken) {
+        setTimeout(() => {
+          fetch("/setup-status").then(r => r.json()).then(d => {
+            if (d.ngrok_url) {
+              const el = document.getElementById("ngrok-status");
+              el.className = "test-result ok"; el.style.display = "block";
+              el.textContent = "✓ 터널 연결됨: " + d.ngrok_url;
+            }
+          }).catch(() => {});
+        }, 10000);
+      }
+    } catch(e) {
+      msg.className = "status-msg err"; msg.textContent = "오류: " + e.message;
+    }
+    btn.disabled = false; btn.textContent = "설정 저장";
+  }
+</script>
+</body>
+</html>

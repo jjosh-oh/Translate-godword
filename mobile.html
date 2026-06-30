@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+  <title>실시간 통역</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --text-color: #ffffff;
+      --bg-color: #000000;
+      --base-size: 6.5vw;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    }
+
+    #app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 상단 바 */
+    #topbar {
+      flex-shrink: 0;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 13px;
+      color: #888;
+    }
+
+    #conn-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #f44336; display: inline-block; margin-right: 6px;
+      vertical-align: middle;
+    }
+    #conn-dot.on { background: #4caf50; }
+
+    #size-controls button {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      width: 34px; height: 34px;
+      font-size: 18px;
+      margin-left: 6px;
+    }
+
+    /* 자막 영역 */
+    #subtitles {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+      gap: 14px;
+    }
+
+    .line {
+      font-size: var(--base-size);
+      font-weight: 700;
+      line-height: 1.45;
+      color: var(--text-color);
+      word-break: keep-all;
+      flex-shrink: 0;
+    }
+
+    .line.current { color: var(--text-color); }
+
+    #empty {
+      margin: auto;
+      color: #555;
+      font-size: 4.5vw;
+      font-weight: 400;
+      text-align: center;
+      padding: 0 30px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div id="topbar">
+    <span><span id="conn-dot"></span><span id="conn-text">연결 중...</span></span>
+    <span id="size-controls">
+      <button onclick="changeSize(-0.5)">－</button>
+      <button onclick="changeSize(0.5)">＋</button>
+    </span>
+  </div>
+
+  <div id="subtitles">
+    <div id="empty">통역이 시작되면<br>이곳에 자막이 표시됩니다.</div>
+  </div>
+</div>
+
+<script>
+  const subtitles = document.getElementById("subtitles");
+  const connDot = document.getElementById("conn-dot");
+  const connText = document.getElementById("conn-text");
+
+  let currentText = "";
+  let lines = [];
+  let baseSize = 6.5;
+
+  function changeSize(delta) {
+    baseSize = Math.max(3.5, Math.min(11, baseSize + delta));
+    document.documentElement.style.setProperty("--base-size", baseSize + "vw");
+    render(currentText);
+  }
+
+  function applySettings(s) {
+    if (s.text_color) document.documentElement.style.setProperty("--text-color", s.text_color);
+    if (s.bg_color) document.documentElement.style.setProperty("--bg-color", s.bg_color);
+  }
+
+  // 초기 설정 불러오기
+  fetch("/settings").then(r => r.json()).then(applySettings).catch(() => {});
+
+  function render(streamingText) {
+    const empty = document.getElementById("empty");
+    if (empty) empty.remove();
+
+    subtitles.innerHTML = "";
+
+    lines.forEach((text) => {
+      const div = document.createElement("div");
+      div.className = "line";
+      div.textContent = text;
+      subtitles.appendChild(div);
+    });
+
+    if (streamingText) {
+      const div = document.createElement("div");
+      div.className = "line current";
+      div.textContent = streamingText;
+      subtitles.appendChild(div);
+    }
+
+    // 넘치면 맨 위부터 제거
+    while (lines.length > 0 && subtitles.scrollHeight > subtitles.clientHeight) {
+      lines.shift();
+      subtitles.removeChild(subtitles.firstChild);
+    }
+  }
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(proto + "//" + location.host + "/ws-display");
+
+    ws.onopen = () => {
+      connDot.classList.add("on");
+      connText.textContent = "연결됨";
+    };
+    ws.onclose = () => {
+      connDot.classList.remove("on");
+      connText.textContent = "재연결 중...";
+      setTimeout(connect, 2000); // 자동 재연결
+    };
+    ws.onerror = () => {
+      connDot.classList.remove("on");
+      connText.textContent = "재연결 중...";
+    };
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "ping") return;
+      if (msg.type === "settings") {
+        applySettings(msg.data);
+      } else if (msg.type === "clear") {
+        if (currentText.trim()) lines.push(currentText.trim());
+        currentText = "";
+        render("");
+      } else if (msg.type === "done") {
+        // 완료
+      } else if (msg.type === "chunk") {
+        currentText += msg.data.replace(/\\n/g, "\n");
+        render(currentText);
+      }
+    };
+  }
+
+  connect();
+
+  // 화면 꺼짐 방지 시도 (지원 기기에서만)
+  if ("wakeLock" in navigator) {
+    let wakeLock = null;
+    const requestWake = async () => {
+      try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+    };
+    requestWake();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") requestWake();
+    });
+  }
+</script>
+
+</body>
+</html>

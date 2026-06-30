@@ -1,0 +1,5 @@
+서버 시작
+  운영자 대시보드: http://localhost:5000/operator
+  출력 화면:       http://localhost:5000
+ * Serving Flask app 'server'
+ * Debug mode: off

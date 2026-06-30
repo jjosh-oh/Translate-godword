@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>운영자 대시보드</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      background: #0f0f0f;
+      color: #e0e0e0;
+      font-family: 'Malgun Gothic', sans-serif;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    header h1 { font-size: 14px; font-weight: bold; color: #fff; }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .badge.connected { background: #1a3a1a; color: #4caf50; border: 1px solid #4caf50; }
+    .badge.disconnected { background: #3a1a1a; color: #f44336; border: 1px solid #f44336; }
+
+    .hint { font-size: 11px; color: #555; margin-left: auto; }
+
+    /* 2열 레이아웃 */
+    main {
+      flex: 1;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .col { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    .device-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* 긴 마이크 이름이 칸을 밀어내지 않도록 줄어들게 하고, 옆 버튼은 항상 보이게 */
+    .device-row select {
+      min-width: 0;
+      text-overflow: ellipsis;
+    }
+    .device-row .btn {
+      flex-shrink: 0;
+    }
+
+    select {
+      flex: 1;
+      background: #252525;
+      color: #e0e0e0;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .btn {
+      padding: 7px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-start { background: #2d7a2d; color: #fff; }
+    .btn-stop  { background: #7a2d2d; color: #fff; }
+    .btn-gray  { background: #333; color: #ccc; }
+
+    /* 이퀄라이저 */
+    .eq-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-top: 10px;
+    }
+    .eq-label { font-size: 11px; color: #555; white-space: nowrap; }
+    #eq-canvas { display: block; border-radius: 3px; flex: 1; }
+
+    /* 송출 버튼 행 */
+    .controls-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    /* 슬라이더 */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .setting-item label {
+      display: block;
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .value-display { float: right; color: #aaa; }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: #4a9eff;
+      cursor: pointer;
+    }
+
+    input[type=color] {
+      width: 100%;
+      height: 30px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      cursor: pointer;
+      background: none;
+      padding: 2px;
+    }
+
+    /* 언어 */
+    .lang-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .lang-row span { color: #555; font-size: 16px; }
+
+    /* 미리보기 */
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .preview-box {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .preview-label {
+      font-size: 10px;
+      color: #555;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      flex-shrink: 0;
+    }
+
+    .preview-text {
+      font-size: 13px;
+      color: #ccc;
+      line-height: 1.5;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    .preview-text.input-text { color: #aaa; }
+    .preview-text.output-text { color: #7ec8e3; font-weight: bold; }
+
+    .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: #7ec8e3;
+      animation: blink 1s infinite;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>설교 실시간 번역 — 운영자 대시보드</h1>
+  <span id="status-badge" class="badge disconnected">연결 중...</span>
+  <span class="hint">출력 화면 / OBS 브라우저 소스 의 주소 사용: <strong>http://localhost:5000</strong></span>
+</header>
+
+<main>
+
+  <!-- 왼쪽 열 -->
+  <div class="col">
+
+    <!-- 오디오 입력 -->
+    <div class="card">
+      <div class="card-title">오디오 입력 소스</div>
+      <div class="device-row">
+        <select id="device-select"><option value="">마이크를 선택하세요...</option></select>
+        <button class="btn btn-gray" onclick="loadDevices()">🔄 새로고침</button>
+      </div>
+      <div class="eq-wrap">
+        <span class="eq-label">입력 레벨</span>
+        <canvas id="eq-canvas" height="36"></canvas>
+        <span id="eq-status" style="font-size:11px; color:#555; white-space:nowrap;">대기 중</span>
+      </div>
+    </div>
+
+    <!-- 설교 자료 업로드 -->
+    <div class="card">
+      <div class="card-title">설교 자료 업로드 (선택)</div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="file" id="sermon-file" style="display:none" onchange="uploadSermon()">
+        <button class="btn btn-gray" onclick="document.getElementById('sermon-file').click()">📄 파일 선택</button>
+        <span id="upload-status" style="font-size:12px; color:#666;">업로드된 자료 없음</span>
+        <button class="btn btn-gray" id="clear-btn" onclick="clearSermon()" style="display:none; margin-left:auto;">✕ 삭제</button>
+      </div>
+      <div id="upload-preview" style="margin-top:8px; font-size:11px; color:#555; line-height:1.5; display:none;"></div>
+    </div>
+
+    <!-- 교회 용어집 (인식 힌트) -->
+    <div class="card">
+      <div class="card-title">교회 용어집 — 이름·지명 (인식 정확도↑)</div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="file" id="glossary-file" style="display:none" onchange="uploadGlossary()">
+        <button class="btn btn-gray" onclick="document.getElementById('glossary-file').click()">📄 용어집 올리기</button>
+        <span id="glossary-status" style="font-size:12px; color:#666;">불러오는 중...</span>
+      </div>
+      <div id="glossary-preview" style="margin-top:8px; font-size:11px; color:#555; line-height:1.5;"></div>
+    </div>
+
+    <!-- 실시간 미리보기 -->
+    <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:340px;">
+      <div class="card-title" style="flex-shrink:0;">실시간 미리보기</div>
+      <div class="preview-grid">
+        <div class="preview-box">
+          <div class="preview-label">인식 (입력)</div>
+          <div class="preview-text input-text" id="input-preview">—</div>
+        </div>
+        <div class="preview-box">
+          <div class="preview-label">번역 (출력)</div>
+          <div class="preview-text output-text" id="output-preview">—</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 오른쪽 열 -->
+  <div class="col">
+
+    <!-- 언어 설정 -->
+    <div class="card">
+      <div class="card-title">언어 설정</div>
+      <div class="lang-row">
+        <select id="source-lang-display" onchange="onSourceLangChange()">
+          <option value="ko-KR">한국어</option>
+          <option value="en-US">English</option>
+          <option value="ja-JP">日本語</option>
+          <option value="zh-CN">中文</option>
+          <option value="es-ES">Español</option>
+          <option value="fr-FR">Français</option>
+          <option value="de-DE">Deutsch</option>
+        </select>
+        <span>→</span>
+        <select id="target-lang-display" onchange="applySettings()">
+          <option value="English">영어</option>
+          <option value="Korean">한국어</option>
+          <option value="Japanese">일본어</option>
+          <option value="Chinese">중국어</option>
+          <option value="Spanish">스페인어</option>
+          <option value="French">프랑스어</option>
+          <option value="German">독일어</option>
+          <option value="Arabic">아랍어</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 송출 제어 -->
+    <div class="card">
+      <div class="card-title">송출 제어</div>
+      <div class="controls-row">
+        <button class="btn btn-start" id="start-btn" onclick="startBroadcast()">▶ 송출 창 열기</button>
+        <button class="btn btn-gray" id="mic-btn" onclick="toggleMic()" disabled>🎤 마이크 시작</button>
+        <button class="btn btn-gray" id="fs-btn" onclick="fullscreenDisplay()" disabled>⛶ 전체화면</button>
+        <button class="btn btn-stop" id="stop-btn" onclick="stopBroadcast()" disabled>■ 송출 종료</button>
+      </div>
+    </div>
+
+    <!-- 셀폰 접속 -->
+    <div class="card">
+      <div class="card-title">셀폰 접속 (QR)</div>
+      <input type="hidden" id="tunnel-url">
+      <div style="display:flex; gap:12px; align-items:center;">
+        <img id="qr-img" style="width:88px; height:88px; background:#fff; border-radius:6px; padding:4px; flex-shrink:0;">
+        <div>
+          <div id="qr-link" style="font-size:11px; color:#7ec8e3; word-break:break-all;"></div>
+          <div style="font-size:11px; color:#666; margin-top:4px;">교인들이 이 QR을 스캔하면 셀폰에서 자막을 봅니다</div>
+        </div>
+      </div>
+      <div id="qr-area" style="display:none;"></div>
+    </div>
+
+    <!-- 화면 설정 -->
+    <div class="card">
+      <div class="card-title">화면 설정</div>
+      <div class="settings-grid">
+        <div class="setting-item" style="grid-column:1/-1">
+          <label>폰트 크기 <span class="value-display" id="font-size-val">5vw</span></label>
+          <input type="range" id="font-size" min="2" max="12" step="0.5" value="5" oninput="updateFontSize(this.value)">
+        </div>
+        <div class="setting-item">
+          <label>글자색</label>
+          <input type="color" id="text-color" value="#ffffff" onchange="applySettings()">
+        </div>
+        <div class="setting-item">
+          <label>배경색</label>
+          <input type="color" id="bg-color" value="#000000" onchange="applySettings()">
+        </div>
+        <div class="setting-item" style="grid-column:1/-1">
+          <label>번역 출력 지연 <span class="value-display" id="delay-val">0s</span></label>
+          <input type="range" id="delay" min="0" max="10" step="1" value="0" oninput="updateDelay(this.value)">
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<script>
+  // 이퀄라이저
+  let audioCtx = null;
+  let analyser = null;
+  let eqStream = null;
+  let eqAnimId = null;
+  const eqCanvas = document.getElementById("eq-canvas");
+  const eqCtx = eqCanvas.getContext("2d");
+  const eqStatus = document.getElementById("eq-status");
+
+  async function startEqualizer(deviceId) {
+    if (eqStream) { eqStream.getTracks().forEach(t => t.stop()); }
+    if (audioCtx) { audioCtx.close(); }
+    if (eqAnimId) { cancelAnimationFrame(eqAnimId); }
+
+    try {
+      const constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+      eqStream = await navigator.mediaDevices.getUserMedia(constraints);
+      audioCtx = new AudioContext();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      audioCtx.createMediaStreamSource(eqStream).connect(analyser);
+      drawEQ();
+      eqStatus.textContent = "입력 감지 중";
+      eqStatus.style.color = "#4caf50";
+    } catch (e) {
+      eqStatus.textContent = "마이크 오류";
+      eqStatus.style.color = "#f44336";
+    }
+  }
+
+  function drawEQ() {
+    eqAnimId = requestAnimationFrame(drawEQ);
+    const bars = analyser.frequencyBinCount;
+    const data = new Uint8Array(bars);
+    analyser.getByteFrequencyData(data);
+
+    const W = eqCanvas.width, H = eqCanvas.height;
+    eqCtx.clearRect(0, 0, W, H);
+
+    const barW = Math.floor(W / bars) - 1;
+    for (let i = 0; i < bars; i++) {
+      const ratio = data[i] / 255;
+      const barH = Math.max(2, ratio * H);
+      // 초록 → 노랑 → 빨강 그라디언트
+      const r = Math.round(ratio * 255);
+      const g = Math.round((1 - ratio * 0.6) * 200);
+      eqCtx.fillStyle = `rgb(${r},${g},50)`;
+      eqCtx.fillRect(i * (barW + 1), H - barH, barW, barH);
+    }
+  }
+
+  // 장치 선택 시 이퀄라이저 갱신
+  document.getElementById("device-select").addEventListener("change", function () {
+    startEqualizer(this.value);
+  });
+
+  let isListening = false;
+  let inputLines = [];   // 완성된 인식 문장 누적
+  let outputLines = [];  // 완성된 번역 문장 누적
+
+  // 박스를 넘치면 맨 위 줄부터 제거(위로 차오르며 스크롤)
+  function trimTop(box, arr) {
+    while (arr.length > 0 && box.scrollHeight > box.clientHeight) {
+      arr.shift();
+      box.removeChild(box.firstChild);
+    }
+  }
+
+  // 인식 미리보기: 완성 문장들(선명) 누적 + 맨 아래 임시 인식(흐림)
+  function renderInputPreview(interim) {
+    const ip = document.getElementById("input-preview");
+    ip.innerHTML = "";
+    inputLines.forEach(function (t) {
+      const d = document.createElement("div");
+      d.style.color = "#ccc";
+      d.style.marginBottom = "4px";
+      d.textContent = t;
+      ip.appendChild(d);
+    });
+    if (interim) {
+      const d = document.createElement("div");
+      d.style.color = "#777";
+      d.style.fontStyle = "italic";
+      d.textContent = interim + " …";
+      ip.appendChild(d);
+    }
+    trimTop(ip, inputLines);
+  }
+
+  // 번역 미리보기: 완성 번역들 누적 + 맨 아래 현재 번역(스트리밍)
+  function renderOutputPreview(streaming) {
+    const op = document.getElementById("output-preview");
+    op.innerHTML = "";
+    outputLines.forEach(function (t) {
+      const d = document.createElement("div");
+      d.style.marginBottom = "4px";
+      d.textContent = t;
+      op.appendChild(d);
+    });
+    if (streaming) {
+      const d = document.createElement("div");
+      d.innerHTML = streaming + '<span class="cursor"></span>';
+      op.appendChild(d);
+    }
+    trimTop(op, outputLines);
+  }
+
+  let outputText = "";
+  let isTranslating = false;
+  let displayWindow = null;
+
+  // 운영자 스트림 연결
+  const opStream = new EventSource("/operator-stream");
+  opStream.onopen = () => {
+    document.getElementById("status-badge").textContent = "연결됨";
+    document.getElementById("status-badge").className = "badge connected";
+  };
+  opStream.onerror = () => {
+    document.getElementById("status-badge").textContent = "연결 끊김";
+    document.getElementById("status-badge").className = "badge disconnected";
+  };
+  opStream.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "input") {
+      // 완성된 인식 문장 — 누적
+      inputLines.push(msg.data);
+      renderInputPreview("");
+    } else if (msg.type === "interim") {
+      renderInputPreview(msg.data);
+    } else if (msg.type === "stt_error") {
+      const ip = document.getElementById("input-preview");
+      ip.innerHTML = '<span style="color:#f44336">⚠ 음성인식 오류: ' + msg.data + '</span>';
+    } else if (msg.type === "output_clear") {
+      outputText = "";
+      renderOutputPreview("");
+    } else if (msg.type === "output_chunk") {
+      outputText += msg.data;
+      renderOutputPreview(outputText);
+    } else if (msg.type === "done") {
+      // 완성된 번역 문장 — 누적
+      if (outputText.trim()) outputLines.push(outputText.trim());
+      outputText = "";
+      renderOutputPreview("");
+      isTranslating = false;
+    } else if (msg.type === "settings") {
+      applyFromServer(msg.data);
+    }
+  };
+
+  function applyFromServer(s) {
+    document.getElementById("font-size").value = s.font_size;
+    document.getElementById("font-size-val").textContent = s.font_size + "vw";
+    document.getElementById("text-color").value = s.text_color;
+    document.getElementById("bg-color").value = s.bg_color;
+    document.getElementById("delay").value = s.delay;
+    document.getElementById("delay-val").textContent = s.delay + "s";
+    document.getElementById("target-lang-display").value = s.target_lang;
+  }
+
+  function updateFontSize(val) {
+    document.getElementById("font-size-val").textContent = val + "vw";
+    applySettings();
+  }
+
+  function updateDelay(val) {
+    document.getElementById("delay-val").textContent = val + "s";
+    applySettings();
+  }
+
+  function applySettings() {
+    fetch("/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        font_size: parseFloat(document.getElementById("font-size").value),
+        text_color: document.getElementById("text-color").value,
+        bg_color: document.getElementById("bg-color").value,
+        delay: parseInt(document.getElementById("delay").value),
+        target_lang: document.getElementById("target-lang-display").value,
+      })
+    });
+  }
+
+  // 마이크 장치 목록
+  async function uploadSermon() {
+    const file = document.getElementById("sermon-file").files[0];
+    if (!file) return;
+
+    const status = document.getElementById("upload-status");
+    const preview = document.getElementById("upload-preview");
+    const clearBtn = document.getElementById("clear-btn");
+
+    status.textContent = "업로드 중...";
+    status.style.color = "#aaa";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.error) {
+        status.textContent = "오류: " + data.error;
+        status.style.color = "#f44336";
+      } else {
+        status.textContent = `✓ ${file.name} (${data.chars.toLocaleString()}자)`;
+        status.style.color = "#4caf50";
+        preview.textContent = "미리보기: " + data.preview + "...";
+        preview.style.display = "block";
+        clearBtn.style.display = "inline-flex";
+      }
+    } catch (e) {
+      status.textContent = "업로드 실패";
+      status.style.color = "#f44336";
+    }
+  }
+
+  async function clearSermon() {
+    await fetch("/upload-clear", { method: "POST" });
+    document.getElementById("upload-status").textContent = "업로드된 자료 없음";
+    document.getElementById("upload-status").style.color = "#666";
+    document.getElementById("upload-preview").style.display = "none";
+    document.getElementById("clear-btn").style.display = "none";
+    document.getElementById("sermon-file").value = "";
+  }
+
+  // 교회 용어집
+  async function loadGlossaryInfo() {
+    try {
+      const res = await fetch("/glossary-info");
+      const data = await res.json();
+      const st = document.getElementById("glossary-status");
+      st.textContent = "✓ 용어 " + data.count + "개 등록됨";
+      st.style.color = "#4caf50";
+      document.getElementById("glossary-preview").textContent = data.preview ? ("예: " + data.preview + " …") : "";
+    } catch (e) {}
+  }
+
+  async function uploadGlossary() {
+    const file = document.getElementById("glossary-file").files[0];
+    if (!file) return;
+    const st = document.getElementById("glossary-status");
+    st.textContent = "업로드 중..."; st.style.color = "#aaa";
+    const fd = new FormData(); fd.append("file", file);
+    try {
+      const res = await fetch("/upload-glossary", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.error) { st.textContent = "오류: " + data.error; st.style.color = "#f44336"; }
+      else {
+        st.textContent = "✓ 용어 " + data.count + "개 등록됨";
+        st.style.color = "#4caf50";
+        document.getElementById("glossary-preview").textContent = data.preview ? ("예: " + data.preview + " …") : "";
+      }
+    } catch (e) { st.textContent = "업로드 실패"; st.style.color = "#f44336"; }
+  }
+
+  loadGlossaryInfo();
+
+  async function loadDevices() {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(d => d.kind === "audioinput");
+      const sel = document.getElementById("device-select");
+      sel.innerHTML = "";
+      audioInputs.forEach((d, i) => {
+        const opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `마이크 ${i + 1}`;
+        sel.appendChild(opt);
+      });
+      // 첫 번째 장치로 이퀄라이저 자동 시작
+      if (audioInputs.length > 0) startEqualizer(audioInputs[0].deviceId);
+    } catch (e) {
+      alert("마이크 권한을 허용해주세요.");
+    }
+  }
+
+  loadDevices();
+
+  // 송출 창 열기
+  function startBroadcast() {
+    displayWindow = window.open("/", "display", "width=1280,height=720");
+    document.getElementById("mic-btn").disabled = false;
+    document.getElementById("stop-btn").disabled = false;
+    document.getElementById("fs-btn").disabled = false;
+    document.getElementById("start-btn").disabled = true;
+  }
+
+  async function loadTunnelUrl() {
+    try {
+      const res = await fetch("/tunnel-url");
+      const data = await res.json();
+      if (data.url) {
+        document.getElementById("tunnel-url").value = data.url;
+        makeQR();
+      } else {
+        document.getElementById("tunnel-url").placeholder = "주소를 찾지 못했습니다 (터널 실행 확인)";
+      }
+    } catch (e) {}
+  }
+
+  function makeQR() {
+    let url = document.getElementById("tunnel-url").value.trim();
+    if (!url) return;
+    url = url.replace(/\/+$/, ""); // 끝 슬래시 제거
+    const mobileUrl = url + "/mobile";
+    const qrImg = document.getElementById("qr-img");
+    // 1순위: api.qrserver.com, 실패 시 quickchart.io로 대체
+    qrImg.onerror = function () {
+      qrImg.onerror = null;
+      qrImg.src = "https://quickchart.io/qr?size=300&text=" + encodeURIComponent(mobileUrl);
+    };
+    qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(mobileUrl);
+    document.getElementById("qr-link").textContent = mobileUrl;
+    document.getElementById("qr-area").style.display = "block";
+  }
+
+  // 페이지 로드 시 자동으로 주소 불러오기 시도
+  setTimeout(loadTunnelUrl, 1000);
+
+  function fullscreenDisplay() {
+    if (displayWindow && !displayWindow.closed) {
+      displayWindow.focus();
+      displayWindow.postMessage("__fullscreen__", "*");
+    }
+  }
+
+  function toggleMic() {
+    if (!isListening) {
+      startMic();
+    } else {
+      stopMic();
+    }
+  }
+
+  function stopBroadcast() {
+    stopMic();
+    if (displayWindow) displayWindow.close();
+    document.getElementById("start-btn").disabled = false;
+    document.getElementById("mic-btn").disabled = true;
+    document.getElementById("stop-btn").disabled = true;
+    document.getElementById("fs-btn").disabled = true;
+  }
+
+  // ===== Google Cloud Speech 스트리밍 (서버 경유) =====
+  let audioWS = null;
+  let audioCtx2 = null;
+  let micStream = null;
+  let processor = null;
+
+  async function startMic() {
+    try {
+      const deviceId = document.getElementById("device-select").value;
+      const constraints = {
+        audio: deviceId
+          ? { deviceId: { exact: deviceId }, channelCount: 1, echoCancellation: false, noiseSuppression: true }
+          : { channelCount: 1, echoCancellation: false, noiseSuppression: true }
+      };
+      micStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      alert("마이크를 열 수 없습니다: " + e.message);
+      return;
+    }
+
+    // WebSocket 연결 (https면 wss)
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    audioWS = new WebSocket(proto + "//" + location.host + "/audio");
+    audioWS.binaryType = "arraybuffer";
+
+    audioWS.onopen = () => {
+      // 설정 전송
+      audioWS.send(JSON.stringify({
+        source_lang_code: document.getElementById("source-lang-display").value,
+        target_lang: document.getElementById("target-lang-display").value
+      }));
+      beginCapture();
+      document.getElementById("mic-btn").textContent = "⏹ 마이크 중지";
+      document.getElementById("mic-btn").style.background = "#7a2d2d";
+      isListening = true;
+    };
+
+    audioWS.onerror = () => {
+      const input = document.getElementById("input-preview");
+      if (input) { input.textContent = "⚠ 음성 서버 연결 오류"; input.style.color = "#f44336"; }
+    };
+  }
+
+  function beginCapture() {
+    audioCtx2 = new AudioContext();
+    const source = audioCtx2.createMediaStreamSource(micStream);
+    processor = audioCtx2.createScriptProcessor(4096, 1, 1);
+    const inputRate = audioCtx2.sampleRate;
+
+    processor.onaudioprocess = (e) => {
+      if (!audioWS || audioWS.readyState !== 1) return;
+      const input = e.inputBuffer.getChannelData(0);
+      const down = downsampleTo16k(input, inputRate);
+      audioWS.send(down.buffer);
+    };
+
+    source.connect(processor);
+    processor.connect(audioCtx2.destination);
+  }
+
+  // 입력 샘플레이트 → 16kHz Int16 PCM 변환
+  function downsampleTo16k(buffer, inputRate) {
+    const targetRate = 16000;
+    if (inputRate === targetRate) {
+      return floatToInt16(buffer);
+    }
+    const ratio = inputRate / targetRate;
+    const newLen = Math.round(buffer.length / ratio);
+    const result = new Int16Array(newLen);
+    let pos = 0;
+    for (let i = 0; i < newLen; i++) {
+      const idx = Math.round(i * ratio);
+      let s = buffer[idx] || 0;
+      s = Math.max(-1, Math.min(1, s));
+      result[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return result;
+  }
+
+  function floatToInt16(buffer) {
+    const result = new Int16Array(buffer.length);
+    for (let i = 0; i < buffer.length; i++) {
+      let s = Math.max(-1, Math.min(1, buffer[i]));
+      result[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return result;
+  }
+
+  function stopMic() {
+    isListening = false;
+    if (processor) { try { processor.disconnect(); } catch(e){} processor = null; }
+    if (audioCtx2) { try { audioCtx2.close(); } catch(e){} audioCtx2 = null; }
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (audioWS && audioWS.readyState === 1) { try { audioWS.close(); } catch(e){} }
+    audioWS = null;
+    document.getElementById("mic-btn").textContent = "🎤 마이크 시작";
+    document.getElementById("mic-btn").style.background = "";
+  }
+
+  function onSourceLangChange() {
+    if (isListening) {
+      stopMic();
+      setTimeout(() => startMic(), 400);
+    }
+  }
+</script>
+
+</body>
+</html>

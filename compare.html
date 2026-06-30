@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude vs Gemini 번역 비교</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: #0f0f0f; color: #e0e0e0;
+      font-family: 'Malgun Gothic', sans-serif; font-size: 14px;
+      display: flex; flex-direction: column;
+    }
+    header {
+      background: #1a1a1a; border-bottom: 1px solid #2a2a2a;
+      padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+    }
+    header h1 { font-size: 15px; color: #fff; }
+    select {
+      background: #252525; color: #e0e0e0; border: 1px solid #333;
+      border-radius: 6px; padding: 6px 10px; font-size: 13px; outline: none;
+    }
+    .btn {
+      padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px;
+      font-weight: bold; cursor: pointer; color: #fff;
+    }
+    .btn-start { background: #2d7a2d; }
+    .btn-stop { background: #7a2d2d; }
+    #input-bar {
+      background: #141414; border-bottom: 1px solid #2a2a2a;
+      padding: 8px 20px; font-size: 13px; color: #aaa; min-height: 34px; flex-shrink: 0;
+    }
+    main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #2a2a2a; overflow: hidden; }
+    .col { background: #0f0f0f; display: flex; flex-direction: column; overflow: hidden; }
+    .col-title {
+      padding: 10px 16px; font-weight: bold; font-size: 14px;
+      border-bottom: 1px solid #2a2a2a; flex-shrink: 0; display: flex; justify-content: space-between;
+    }
+    .claude .col-title { color: #d98a5b; }
+    .gemini .col-title { color: #5b9bd9; }
+    .lines { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 14px 16px; gap: 8px; }
+    .line { font-size: 17px; line-height: 1.5; word-break: keep-all; }
+    .ms { font-size: 11px; color: #666; font-weight: normal; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Claude vs Gemini 번역 비교</h1>
+    <select id="source-lang">
+      <option value="ko-KR">한국어</option>
+      <option value="en-US">English</option>
+    </select>
+    <span style="color:#555">→</span>
+    <select id="target-lang">
+      <option value="English">영어</option>
+      <option value="Korean">한국어</option>
+      <option value="Japanese">일본어</option>
+      <option value="Chinese">중국어</option>
+    </select>
+    <select id="device-select" style="max-width:240px"></select>
+    <button class="btn btn-start" id="mic-btn" onclick="toggleMic()">🎤 시작</button>
+  </header>
+
+  <div id="input-bar">인식: —</div>
+
+  <main>
+    <div class="col claude">
+      <div class="col-title"><span>Claude (opus-4-8)</span><span class="ms" id="claude-ms"></span></div>
+      <div class="lines" id="claude-lines"></div>
+    </div>
+    <div class="col gemini">
+      <div class="col-title"><span>Gemini (2.5-flash)</span><span class="ms" id="gemini-ms"></span></div>
+      <div class="lines" id="gemini-lines"></div>
+    </div>
+  </main>
+
+<script>
+  let ws = null, isListening = false, micStream = null, audioCtx = null, processor = null;
+  const claudeLines = [], geminiLines = [];
+
+  async function loadDevices() {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput");
+      const sel = document.getElementById("device-select");
+      sel.innerHTML = "";
+      ds.forEach((d, i) => { const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || ("마이크 " + (i+1)); sel.appendChild(o); });
+    } catch (e) {}
+  }
+  loadDevices();
+
+  function addLine(box, arr, text) {
+    arr.push(text);
+    const d = document.createElement("div");
+    d.className = "line";
+    d.textContent = text;
+    box.appendChild(d);
+    while (arr.length > 0 && box.scrollHeight > box.clientHeight) { arr.shift(); box.removeChild(box.firstChild); }
+  }
+
+  function toggleMic() { isListening ? stopMic() : startMic(); }
+
+  async function startMic() {
+    const deviceId = document.getElementById("device-select").value;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: deviceId ? { deviceId: { exact: deviceId } } : true });
+    } catch (e) { alert("마이크 오류: " + e.message); return; }
+
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(proto + "//" + location.host + "/audio-compare");
+    ws.binaryType = "arraybuffer";
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ source_lang_code: document.getElementById("source-lang").value, target_lang: document.getElementById("target-lang").value }));
+      beginCapture();
+      isListening = true;
+      const b = document.getElementById("mic-btn"); b.textContent = "⏹ 중지"; b.className = "btn btn-stop";
+    };
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.engine === "input") document.getElementById("input-bar").textContent = "인식: " + m.text;
+      else if (m.engine === "interim") document.getElementById("input-bar").textContent = "인식: " + m.text + " …";
+      else if (m.engine === "claude") { addLine(document.getElementById("claude-lines"), claudeLines, m.text); document.getElementById("claude-ms").textContent = m.ms + " ms"; }
+      else if (m.engine === "gemini") { addLine(document.getElementById("gemini-lines"), geminiLines, m.text); document.getElementById("gemini-ms").textContent = m.ms + " ms"; }
+    };
+  }
+
+  function beginCapture() {
+    audioCtx = new AudioContext();
+    const src = audioCtx.createMediaStreamSource(micStream);
+    processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    const rate = audioCtx.sampleRate;
+    processor.onaudioprocess = (e) => {
+      if (!ws || ws.readyState !== 1) return;
+      const input = e.inputBuffer.getChannelData(0);
+      const ratio = rate / 16000, len = Math.round(input.length / ratio), out = new Int16Array(len);
+      for (let i = 0; i < len; i++) { let s = input[Math.round(i * ratio)] || 0; s = Math.max(-1, Math.min(1, s)); out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF; }
+      ws.send(out.buffer);
+    };
+    src.connect(processor); processor.connect(audioCtx.destination);
+  }
+
+  function stopMic() {
+    isListening = false;
+    if (processor) { try { processor.disconnect(); } catch(e){} processor = null; }
+    if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (ws && ws.readyState === 1) { try { ws.close(); } catch(e){} }
+    ws = null;
+    const b = document.getElementById("mic-btn"); b.textContent = "🎤 시작"; b.className = "btn btn-start";
+  }
+</script>
+</body>
+</html>

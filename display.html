@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>실시간 통역</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --text-color: #ffffff;
+      --bg-color: #000000;
+    }
+
+    body {
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #display {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 40px 60px;
+      text-align: left;
+      overflow: hidden;
+      cursor: pointer;
+      word-break: keep-all;
+      gap: 16px;
+    }
+
+    .line {
+      font-size: var(--line-size, 3.5vw);
+      font-weight: bold;
+      line-height: 1.4;
+      color: var(--text-color) !important;
+      opacity: 1;
+      flex-shrink: 0;
+      text-shadow: none !important;
+      -webkit-text-stroke: 0;
+      filter: none;
+    }
+
+    .line.current {
+      font-size: var(--line-size, 3.5vw);
+      color: var(--text-color) !important;
+    }
+
+    #display.empty {
+      justify-content: center;
+      color: #333;
+      font-size: 2vw;
+      font-weight: normal;
+    }
+
+    /* 하단 상태 바 (마우스 올릴 때만 표시) */
+    #status-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 6px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #444;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    body:hover #status-bar { opacity: 0.6; }
+
+    .fs-hint { color: #444; }
+  </style>
+</head>
+<body>
+
+<div id="display" class="empty" ondblclick="toggleFullscreen()">
+  <span id="empty-msg">통역 대기 중...</span>
+</div>
+
+<div id="status-bar">
+  <span id="status"></span>
+  <span class="fs-hint">화면 더블클릭 = 전체화면</span>
+</div>
+
+<script>
+  const display = document.getElementById("display");
+  const status = document.getElementById("status");
+
+  let translationPending = false;
+  let pendingText = "";
+  let currentText = "";
+  let lines = [];
+
+  // 운영자 대시보드 설정 적용 (글자색, 배경색, 폰트 크기)
+  let baseFontSize = 5;
+  function applyDisplaySettings(s) {
+    if (s.text_color) document.documentElement.style.setProperty("--text-color", s.text_color);
+    if (s.bg_color) document.documentElement.style.setProperty("--bg-color", s.bg_color);
+    if (s.font_size) {
+      baseFontSize = parseFloat(s.font_size);
+      document.documentElement.style.setProperty("--line-size", baseFontSize + "vw");
+      renderLines(currentText);
+    }
+  }
+
+  // 페이지 로드 시 현재 설정 불러오기
+  fetch("/settings").then(r => r.json()).then(applyDisplaySettings).catch(() => {});
+
+  function fitToLines(el, targetLines) {
+    // 최대 크기는 운영자가 설정한 폰트 크기로 제한
+    let low = 0.5, high = baseFontSize;
+    for (let i = 0; i < 20; i++) {
+      const mid = (low + high) / 2;
+      el.style.fontSize = mid + "vw";
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 1;
+      const lines = Math.round(el.offsetHeight / lh);
+      if (lines <= targetLines) low = mid;
+      else high = mid;
+    }
+    el.style.fontSize = low + "vw";
+  }
+
+  function renderLines(streamingText) {
+    display.classList.remove("empty");
+    const emptyMsg = document.getElementById("empty-msg");
+    if (emptyMsg) emptyMsg.remove();
+
+    display.innerHTML = "";
+
+    // 누적된 이전 줄들 (오래된 순)
+    lines.forEach((text) => {
+      const div = document.createElement("div");
+      div.className = "line";
+      div.textContent = text;
+      display.appendChild(div);
+    });
+
+    // 현재 스트리밍 중인 줄
+    if (streamingText) {
+      const div = document.createElement("div");
+      div.className = "line current";
+      div.textContent = streamingText;
+      display.appendChild(div);
+    }
+
+    // 화면을 넘치면 맨 위 줄부터 제거 (위로 스크롤되며 사라짐)
+    while (lines.length > 0 && display.scrollHeight > display.clientHeight) {
+      lines.shift();
+      display.removeChild(display.firstChild);
+    }
+  }
+
+  // WebSocket 연결 (터널 환경에서도 안정적)
+  function connectDisplay() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(proto + "//" + location.host + "/ws-display");
+
+    ws.onclose = () => setTimeout(connectDisplay, 2000); // 자동 재연결
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "ping") return;
+      if (msg.type === "settings") {
+        applyDisplaySettings(msg.data);
+      } else if (msg.type === "clear") {
+        if (currentText.trim()) lines.push(currentText.trim());
+        currentText = "";
+        renderLines("");
+        status.textContent = "번역 중...";
+      } else if (msg.type === "done") {
+        status.textContent = "";
+        translationPending = false;
+      } else if (msg.type === "chunk") {
+        currentText += msg.data.replace(/\\n/g, "\n");
+        renderLines(currentText);
+      }
+    };
+  }
+  connectDisplay();
+
+  // 전체화면
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "F11") { e.preventDefault(); toggleFullscreen(); }
+  });
+
+  // 운영자 대시보드에서 전체화면 명령 수신
+  window.addEventListener("message", (e) => {
+    if (e.data === "__fullscreen__") {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    }
+  });
+</script>
+
+</body>
+</html>

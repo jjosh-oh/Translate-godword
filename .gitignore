@@ -1,0 +1,27 @@
+# API 키 / 인증 파일 (절대 올리지 않음)
+.env
+google-key.json
+*.json
+
+# 사용자 생성 파일
+로그.txt
+현재-셀폰주소.txt
+ngrok-domain.txt
+tunnel.log
+설교/
+
+# PyInstaller 빌드 산출물
+배포빌드/build/
+배포빌드/dist/
+배포빌드/installer/
+배포빌드/ngrok.exe
+__pycache__/
+*.pyc
+*.pyo
+
+# Claude Code 세션 데이터
+.claude/
+
+# 기타
+*.tmp
+Thumbs.db
