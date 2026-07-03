@@ -124,6 +124,22 @@
   <p style="margin-top:8px">바탕화면에 <strong>ChurchInterpreter</strong> 아이콘이 생성됩니다.</p>
 </div>
 
+<div class="step">
+  <span class="step-num">4</span><span class="step-title">Windows 보안 경고 해제 (최초 1회)</span>
+  <p style="margin-top:8px">
+    설치 후 처음 실행 시 <strong>"스마트 앱 컨트롤이 안전하지 않을 수 있는 앱을 차단했습니다"</strong> 메시지가 뜰 수 있습니다.<br>
+    이는 프로그램 서명 인증서가 없어서 발생하는 정상적인 현상입니다. 아래 방법으로 해제하세요.
+  </p>
+  <p style="margin-top:10px"><strong>해제 방법:</strong></p>
+  <ol style="margin-top:6px;margin-left:20px;line-height:2">
+    <li>윈도우 <strong>시작 버튼</strong> 클릭</li>
+    <li>검색창에 <strong>"스마트 앱 컨트롤"</strong> 입력 후 클릭</li>
+    <li><strong>"끄기"</strong> 선택</li>
+    <li>바탕화면의 <strong>ChurchInterpreter</strong> 아이콘을 다시 더블클릭</li>
+  </ol>
+  <p style="margin-top:8px;color:#888;font-size:12px">💡 이 설정은 최초 1회만 하면 됩니다. 이후 실행부터는 경고 없이 바로 실행됩니다.</p>
+</div>
+
 <div class="warn">⚠ 설치 후 처음 실행 시 API 키를 입력해야 합니다. 아래 3장을 먼저 읽고 키를 준비해 두세요.</div>
 
 <!-- 3. API 키 발급 -->
@@ -290,6 +306,7 @@
   <li><strong>마이크 켜기/끄기</strong> — 통역 시작·중지</li>
   <li><strong>언어 선택</strong> — 원본/번역 언어 변경</li>
   <li><strong>원고 업로드</strong> — PDF 또는 Word 파일로 번역 정확도 향상</li>
+  <li><strong>용어집 업로드</strong> — 교회 고유명사를 추가해 음성인식 정확도 향상. 업로드 시 기존 용어집에 새 단어가 추가됩니다 (기존 단어 유지)</li>
   <li><strong>화면 설정</strong> — 글자 크기·색상·배경색 조절 (빔프로젝터에 실시간 반영)</li>
   <li><strong>QR코드</strong> — 교인 셀폰 접속용 주소</li>
 </ul>
@@ -314,6 +331,17 @@
 
 <h3>Q. 고유명사(사람 이름, 성경 지명)가 잘못 인식돼요</h3>
 <p>대시보드 → 용어집 업로드에서 교회 특유의 고유명사를 추가하면 인식 정확도가 올라갑니다.</p>
+<p style="margin-top:8px"><strong>용어집 파일 작성 방법:</strong></p>
+<ul style="margin-top:4px;margin-left:20px;line-height:2">
+  <li>지원 형식: <code>.txt</code>, <code>.pdf</code>, <code>.docx</code>(Word)</li>
+  <li><strong>한 줄에 단어 하나씩</strong> 입력 (문장이나 단락 형식 불가)</li>
+  <li>가장 간편한 방법: 메모장에 단어를 한 줄씩 입력 → <code>.txt</code>로 저장 후 업로드</li>
+  <li>업로드 시 기존 용어집은 유지되고 새 단어만 추가됩니다 (중복 자동 제거)</li>
+</ul>
+<p style="margin-top:6px;color:#888;font-size:12px">예시 파일 내용:<br>
+빌립보서<br>
+에베소<br>
+고린도전서</p>
 
 <h3>Q. 셀폰에서 QR을 찍었는데 접속이 안 돼요</h3>
 <p>ngrok 설정이 완료되었는지 확인하세요. 대시보드의 QR코드 영역에 주소가 표시되어 있어야 합니다.</p>

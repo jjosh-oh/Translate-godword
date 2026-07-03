@@ -15,19 +15,30 @@ from dotenv import load_dotenv
 # 실행 위치 판별: .exe로 묶였을 때와 일반 실행을 모두 지원
 #  - BUNDLE_DIR: 화면 파일 등 '내장' 자원 위치 (읽기 전용)
 #  - APP_DIR   : 사용자 파일 위치 (.env, google-key.json, 로그 등)
-#                .exe 실행 시 → %APPDATA%\ChurchInterpreter (Program Files도 쓰기 가능)
+#                .exe 실행 시 → .exe 폴더 (쓰기 불가하면 %APPDATA%\ChurchInterpreter)
 #                개발 실행 시 → 스크립트 폴더
 if getattr(sys, "frozen", False):
     BUNDLE_DIR = sys._MEIPASS
-    APP_DIR = os.path.join(os.environ.get("APPDATA", os.path.dirname(sys.executable)),
-                           "ChurchInterpreter")
-    os.makedirs(APP_DIR, exist_ok=True)
+    # 1순위: .exe 폴더 (설치 위치가 사용자 폴더라 대부분 쓰기 가능,
+    #         AppData는 Windows 앱 격리로 접근이 차단되는 경우가 있음)
+    # 2순위: %APPDATA%\ChurchInterpreter
+    _exe_dir = os.path.dirname(sys.executable)
+    try:
+        _t = os.path.join(_exe_dir, ".write_test")
+        with open(_t, "w") as _f:
+            _f.write("ok")
+        os.remove(_t)
+        APP_DIR = _exe_dir
+    except Exception:
+        APP_DIR = os.path.join(os.environ.get("APPDATA", _exe_dir),
+                               "ChurchInterpreter")
+        os.makedirs(APP_DIR, exist_ok=True)
 else:
     BUNDLE_DIR = os.path.dirname(os.path.abspath(__file__))
     APP_DIR = BUNDLE_DIR
 
 # 설정(.env)은 APP_DIR에서 읽음
-load_dotenv(os.path.join(APP_DIR, ".env"))
+load_dotenv(os.path.join(APP_DIR, ".env"), override=True, encoding="utf-8-sig")
 
 # Google Cloud 인증: .exe 옆 google-key.json 자동 사용
 _key_path = os.path.join(APP_DIR, "google-key.json")
@@ -50,15 +61,27 @@ def _start_ngrok():
     if not authtoken:
         return  # 설정 안 됐으면 건너뜀
 
+    # ngrok 실행 파일: .exe 폴더에 번들된 것 우선, 없으면 시스템 PATH
+    ngrok_exe = "ngrok"
+    if getattr(sys, "frozen", False):
+        _bundled = os.path.join(os.path.dirname(sys.executable), "ngrok.exe")
+        if os.path.exists(_bundled):
+            ngrok_exe = _bundled
+
+    # 고정 도메인이 있으면 URL을 미리 설정 (파싱 기다릴 필요 없음)
+    if domain:
+        _ngrok_url = "https://" + domain
+        print(f"[ngrok] 고정 도메인: {_ngrok_url}")
+
     # authtoken 등록 (최초 1회 또는 변경 시)
     try:
-        subprocess.run(["ngrok", "config", "add-authtoken", authtoken],
+        subprocess.run([ngrok_exe, "config", "add-authtoken", authtoken],
                        capture_output=True, timeout=10)
     except Exception:
         return
 
     # 터널 시작
-    cmd = ["ngrok", "http", "5000", "--log=stdout", "--log-format=json"]
+    cmd = [ngrok_exe, "http", "5000", "--log=stdout", "--log-format=json"]
     if domain:
         cmd += ["--domain", domain]
     try:
@@ -68,23 +91,23 @@ def _start_ngrok():
         print("[ngrok] ngrok을 찾을 수 없습니다. 설치 여부를 확인하세요.")
         return
 
-    # stdout에서 URL 파싱
-    for line in proc.stdout:
-        try:
-            obj = json.loads(line)
-            url = obj.get("url") or obj.get("public_url") or ""
-            if url.startswith("https://"):
-                _ngrok_url = url
-                print(f"[ngrok] 터널 연결: {_ngrok_url}")
-                break
-        except Exception:
-            # JSON 아닌 줄은 무시
-            if "url=" in line:
-                m = re.search(r"url=(https://\S+)", line)
-                if m:
-                    _ngrok_url = m.group(1)
+    # stdout에서 URL 파싱 (고정 도메인 없는 경우 여기서 URL 확보)
+    if not domain:
+        for line in proc.stdout:
+            try:
+                obj = json.loads(line)
+                url = obj.get("url") or obj.get("public_url") or ""
+                if url.startswith("https://"):
+                    _ngrok_url = url
                     print(f"[ngrok] 터널 연결: {_ngrok_url}")
                     break
+            except Exception:
+                if "url=" in line:
+                    m = re.search(r"url=(https://\S+)", line)
+                    if m:
+                        _ngrok_url = m.group(1)
+                        print(f"[ngrok] 터널 연결: {_ngrok_url}")
+                        break
 
 if os.environ.get("NGROK_AUTHTOKEN"):
     threading.Thread(target=_start_ngrok, daemon=True).start()
@@ -180,6 +203,25 @@ def load_glossary():
 
 load_glossary()
 
+# 번역 대응표 (한글=English 형식)
+translation_mapping = {}
+
+def load_mapping():
+    global translation_mapping
+    path = os.path.join(APP_DIR, "mapping.txt")
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and line:
+                        k, v = line.split("=", 1)
+                        translation_mapping[k.strip()] = v.strip()
+    except Exception:
+        translation_mapping = {}
+
+load_mapping()
+
 
 def _log_translation(src, out):
     try:
@@ -203,6 +245,15 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str):
         f"No explanations or commentary."
     )
 
+    # 번역 대응표가 있으면 프롬프트에 추가
+    mapping_text = ""
+    if translation_mapping:
+        pairs = "\n".join(f"  {k} → {v}" for k, v in translation_mapping.items())
+        mapping_text = (
+            "\n\nName/term translation table (use these EXACT translations when the term appears):\n"
+            + pairs
+        )
+
     if sermon_context:
         # 설교 원고: 고유명사 확인 '참고용'으로만 — 내용을 이어 쓰지 않도록 명시
         reference = (
@@ -213,12 +264,12 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str):
             "--- SERMON REFERENCE (do not output) ---\n" + sermon_context[:8000] + "\n--- END ---"
         )
         system = [
-            {"type": "text", "text": base_instruction},
+            {"type": "text", "text": base_instruction + mapping_text},
             {"type": "text", "text": reference,
              "cache_control": {"type": "ephemeral"}},
         ]
     else:
-        system = base_instruction
+        system = base_instruction + mapping_text
 
     translation_queue.put("__clear__")
     operator_queue.put(("output_clear", ""))
@@ -646,27 +697,30 @@ def _extract_text(file):
 
 @app.route("/upload-glossary", methods=["POST"])
 def upload_glossary():
-    """교회 용어집 업로드 — 한 줄에 하나씩 인식 힌트로 저장(빈도 필터 없음)."""
+    """교회 용어집 업로드 — 기존 용어집에 병합(중복 제거)하여 저장."""
     global glossary_terms
     file = request.files.get("file")
     if not file:
         return jsonify({"error": "파일이 없습니다."}), 400
     try:
         text = _extract_text(file)
-        terms = []
-        seen = set()
+        # 기존 용어 유지 + 새 용어 추가 (순서 보존, 중복 제거)
+        seen = set(glossary_terms)
+        merged = list(glossary_terms)
+        new_count = 0
         for ln in text.splitlines():
             t = ln.strip()
             if t and t not in seen:
                 seen.add(t)
-                terms.append(t)
-        glossary_terms = terms
+                merged.append(t)
+                new_count += 1
+        glossary_terms = merged
         # glossary.txt에 저장(다음 실행에도 유지)
         path = os.path.join(APP_DIR, "glossary.txt")
         with open(path, "w", encoding="utf-8") as f:
-            f.write("\n".join(terms))
-        return jsonify({"status": "ok", "count": len(terms),
-                        "preview": ", ".join(terms[:15])})
+            f.write("\n".join(merged))
+        return jsonify({"status": "ok", "count": len(merged), "added": new_count,
+                        "preview": ", ".join(merged[:15])})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -675,6 +729,42 @@ def upload_glossary():
 def glossary_info():
     return jsonify({"count": len(glossary_terms),
                     "preview": ", ".join(glossary_terms[:15])})
+
+
+@app.route("/upload-mapping", methods=["POST"])
+def upload_mapping():
+    """번역 대응표 업로드 — 한글=English 형식, 기존 항목에 병합."""
+    global translation_mapping
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "파일이 없습니다."}), 400
+    try:
+        text = _extract_text(file)
+        new_count = 0
+        for line in text.splitlines():
+            line = line.strip()
+            if "=" in line and line:
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip()
+                if k and v:
+                    if k not in translation_mapping:
+                        new_count += 1
+                    translation_mapping[k] = v
+        path = os.path.join(APP_DIR, "mapping.txt")
+        with open(path, "w", encoding="utf-8") as f:
+            for k, v in translation_mapping.items():
+                f.write(f"{k}={v}\n")
+        preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
+        return jsonify({"status": "ok", "count": len(translation_mapping),
+                        "added": new_count, "preview": preview})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/mapping-info")
+def mapping_info():
+    preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
+    return jsonify({"count": len(translation_mapping), "preview": preview})
 
 
 @app.route("/settings", methods=["GET", "POST"])
@@ -784,7 +874,7 @@ def setup_status():
     if not has_anthropic or not has_ngrok_token:
         env_path = os.path.join(APP_DIR, ".env")
         if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
+            with open(env_path, "r", encoding="utf-8-sig") as f:
                 content = f.read()
             if not has_anthropic:
                 has_anthropic = "ANTHROPIC_API_KEY=" in content
@@ -817,7 +907,7 @@ def setup_save():
         # 기존 .env 읽어서 해당 키만 교체
         env_vars = {}
         if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
+            with open(env_path, "r", encoding="utf-8-sig") as f:
                 for line in f:
                     line = line.rstrip("\n")
                     if "=" in line and not line.startswith("#"):
@@ -924,7 +1014,23 @@ def _open_browser():
     webbrowser.open(url)
 
 
+def _already_running():
+    """포트 5000에 이미 서버가 떠 있는지 확인."""
+    import socket
+    try:
+        s = socket.create_connection(("127.0.0.1", 5000), timeout=1)
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
 if __name__ == "__main__":
+    if _already_running():
+        import webbrowser
+        print("프로그램이 이미 실행 중입니다. 기존 화면을 엽니다.")
+        webbrowser.open("http://localhost:5000/operator")
+        sys.exit(0)
     print("=" * 50)
     print("  ChurchInterpreter 서버 시작")
     print(f"  설정 파일 위치: {APP_DIR}")

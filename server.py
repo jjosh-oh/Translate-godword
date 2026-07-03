@@ -102,6 +102,25 @@ def load_glossary():
 
 load_glossary()
 
+# 번역 대응표 (한글=English 형식)
+translation_mapping = {}
+
+def load_mapping():
+    global translation_mapping
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mapping.txt")
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and line:
+                        k, v = line.split("=", 1)
+                        translation_mapping[k.strip()] = v.strip()
+    except Exception:
+        translation_mapping = {}
+
+load_mapping()
+
 
 def _log_translation(src, out):
     try:
@@ -125,6 +144,15 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str):
         f"No explanations or commentary."
     )
 
+    # 번역 대응표가 있으면 프롬프트에 추가
+    mapping_text = ""
+    if translation_mapping:
+        pairs = "\n".join(f"  {k} → {v}" for k, v in translation_mapping.items())
+        mapping_text = (
+            "\n\nName/term translation table (use these EXACT translations when the term appears):\n"
+            + pairs
+        )
+
     if sermon_context:
         # 설교 원고: 고유명사 확인 '참고용'으로만 — 내용을 이어 쓰지 않도록 명시
         reference = (
@@ -135,12 +163,12 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str):
             "--- SERMON REFERENCE (do not output) ---\n" + sermon_context[:8000] + "\n--- END ---"
         )
         system = [
-            {"type": "text", "text": base_instruction},
+            {"type": "text", "text": base_instruction + mapping_text},
             {"type": "text", "text": reference,
              "cache_control": {"type": "ephemeral"}},
         ]
     else:
-        system = base_instruction
+        system = base_instruction + mapping_text
 
     translation_queue.put("__clear__")
     operator_queue.put(("output_clear", ""))
@@ -564,27 +592,30 @@ def _extract_text(file):
 
 @app.route("/upload-glossary", methods=["POST"])
 def upload_glossary():
-    """교회 용어집 업로드 — 한 줄에 하나씩 인식 힌트로 저장(빈도 필터 없음)."""
+    """교회 용어집 업로드 — 기존 용어집에 병합(중복 제거)하여 저장."""
     global glossary_terms
     file = request.files.get("file")
     if not file:
         return jsonify({"error": "파일이 없습니다."}), 400
     try:
         text = _extract_text(file)
-        terms = []
-        seen = set()
+        # 기존 용어 유지 + 새 용어 추가 (순서 보존, 중복 제거)
+        seen = set(glossary_terms)
+        merged = list(glossary_terms)
+        new_count = 0
         for ln in text.splitlines():
             t = ln.strip()
             if t and t not in seen:
                 seen.add(t)
-                terms.append(t)
-        glossary_terms = terms
+                merged.append(t)
+                new_count += 1
+        glossary_terms = merged
         # glossary.txt에 저장(다음 실행에도 유지)
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glossary.txt")
         with open(path, "w", encoding="utf-8") as f:
-            f.write("\n".join(terms))
-        return jsonify({"status": "ok", "count": len(terms),
-                        "preview": ", ".join(terms[:15])})
+            f.write("\n".join(merged))
+        return jsonify({"status": "ok", "count": len(merged), "added": new_count,
+                        "preview": ", ".join(merged[:15])})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -593,6 +624,42 @@ def upload_glossary():
 def glossary_info():
     return jsonify({"count": len(glossary_terms),
                     "preview": ", ".join(glossary_terms[:15])})
+
+
+@app.route("/upload-mapping", methods=["POST"])
+def upload_mapping():
+    """번역 대응표 업로드 — 한글=English 형식, 기존 항목에 병합."""
+    global translation_mapping
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "파일이 없습니다."}), 400
+    try:
+        text = _extract_text(file)
+        new_count = 0
+        for line in text.splitlines():
+            line = line.strip()
+            if "=" in line and line:
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip()
+                if k and v:
+                    if k not in translation_mapping:
+                        new_count += 1
+                    translation_mapping[k] = v
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mapping.txt")
+        with open(path, "w", encoding="utf-8") as f:
+            for k, v in translation_mapping.items():
+                f.write(f"{k}={v}\n")
+        preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
+        return jsonify({"status": "ok", "count": len(translation_mapping),
+                        "added": new_count, "preview": preview})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/mapping-info")
+def mapping_info():
+    preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
+    return jsonify({"count": len(translation_mapping), "preview": preview})
 
 
 @app.route("/settings", methods=["GET", "POST"])

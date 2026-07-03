@@ -285,6 +285,20 @@
       <div id="glossary-preview" style="margin-top:8px; font-size:11px; color:#555; line-height:1.5;"></div>
     </div>
 
+    <!-- 번역 대응표 -->
+    <div class="card">
+      <div class="card-title">번역 대응표 — 이름·단어 번역 지정</div>
+      <div style="font-size:11px; color:#888; margin-bottom:8px;">
+        형식: 한글=English (한 줄에 하나씩) &nbsp;예) 김도완=Dowan Kim
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="file" id="mapping-file" style="display:none" onchange="uploadMapping()">
+        <button class="btn btn-gray" onclick="document.getElementById('mapping-file').click()">📄 대응표 올리기</button>
+        <span id="mapping-status" style="font-size:12px; color:#666;">불러오는 중...</span>
+      </div>
+      <div id="mapping-preview" style="margin-top:8px; font-size:11px; color:#555; line-height:1.5;"></div>
+    </div>
+
     <!-- 실시간 미리보기 -->
     <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:340px;">
       <div class="card-title" style="flex-shrink:0;">실시간 미리보기</div>
@@ -642,6 +656,43 @@
   }
 
   loadGlossaryInfo();
+
+  // 번역 대응표
+  async function loadMappingInfo() {
+    try {
+      const res = await fetch("/mapping-info");
+      const data = await res.json();
+      const st = document.getElementById("mapping-status");
+      if (data.count > 0) {
+        st.textContent = "✓ 대응어 " + data.count + "개 등록됨";
+        st.style.color = "#4caf50";
+        document.getElementById("mapping-preview").textContent = data.preview ? ("예: " + data.preview + " …") : "";
+      } else {
+        st.textContent = "등록된 대응표 없음";
+        st.style.color = "#666";
+      }
+    } catch (e) {}
+  }
+
+  async function uploadMapping() {
+    const file = document.getElementById("mapping-file").files[0];
+    if (!file) return;
+    const st = document.getElementById("mapping-status");
+    st.textContent = "업로드 중..."; st.style.color = "#aaa";
+    const fd = new FormData(); fd.append("file", file);
+    try {
+      const res = await fetch("/upload-mapping", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.error) { st.textContent = "오류: " + data.error; st.style.color = "#f44336"; }
+      else {
+        st.textContent = "✓ 대응어 " + data.count + "개 등록됨 (+" + data.added + "개 추가)";
+        st.style.color = "#4caf50";
+        document.getElementById("mapping-preview").textContent = data.preview ? ("예: " + data.preview + " …") : "";
+      }
+    } catch (e) { st.textContent = "업로드 실패"; st.style.color = "#f44336"; }
+  }
+
+  loadMappingInfo();
 
   async function loadDevices() {
     try {
