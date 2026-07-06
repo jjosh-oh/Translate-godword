@@ -106,6 +106,25 @@
       color: #34d8c6; border: 1px solid rgba(22,186,169,0.25);
       border-radius: 20px; font-size: 11px; padding: 2px 10px; margin-left: 8px;
     }
+
+    .help-banner {
+      background: rgba(22,186,169,0.08); border: 1px solid rgba(22,186,169,0.28);
+      border-radius: 12px; padding: 16px 18px; margin-bottom: 28px;
+    }
+    .help-banner h2 { font-size: 14px; font-weight: 600; color: #34d8c6; margin-bottom: 6px; }
+    .help-banner p { font-size: 12px; color: var(--text-2); line-height: 1.6; margin-bottom: 12px; }
+    .help-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .help-btn {
+      flex: 1; min-width: 130px; padding: 11px 14px; border-radius: 9px;
+      font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .help-btn.copy { background: var(--card-2); color: var(--text); border: 1px solid var(--border-strong); }
+    .help-btn.copy:hover { border-color: var(--accent); }
+    .help-btn.open { background: var(--accent); color: #04201c; border: 1px solid var(--accent); }
+    .help-btn.open:hover { background: #22cbb9; }
+    .help-steps { font-size: 11px; color: var(--text-3); margin-top: 10px; line-height: 1.6; }
   </style>
 </head>
 <body>
@@ -114,6 +133,18 @@
     <div class="mark">⛪</div>
     <h1>LiveWord</h1>
     <p>처음 사용 시 API 키를 설정해 주세요</p>
+  </div>
+
+  <!-- 설정 도우미: 무료 Claude가 단계별 안내 -->
+  <div class="help-banner">
+    <h2>💬 설정이 처음이신가요?</h2>
+    <p>무료 Claude(claude.ai)가 아래 3가지 발급을 하나씩 안내해 드립니다.
+       개발 지식이 없어도 대화하며 따라 할 수 있어요.</p>
+    <div class="help-btns">
+      <button type="button" class="help-btn copy" onclick="copyHelpPrompt()">📋 질문 복사</button>
+      <button type="button" class="help-btn open" onclick="window.open('https://claude.ai/new','_blank')">Claude 열기 ↗</button>
+    </div>
+    <div class="help-steps">① <b>질문 복사</b> → ② <b>Claude 열기</b> → ③ 붙여넣기(Ctrl+V) → 안내에 따라 진행</div>
   </div>
 
   <!-- 1. Anthropic API 키 -->
@@ -187,6 +218,35 @@
 </div>
 
 <script>
+  // 무료 Claude에게 붙여넣을 설정 안내 요청문
+  const HELP_PROMPT =
+`저는 교회에서 'LiveWord'라는 실시간 설교 통역 프로그램을 설치하려는 자원봉사자입니다. 컴퓨터·개발 지식은 거의 없습니다.
+
+이 프로그램을 쓰려면 아래 3가지를 발급받아 설정 화면에 입력해야 합니다. 각 항목을 처음부터 끝까지, 한 번에 한 단계씩, 초보자도 그대로 따라 할 수 있게 아주 쉽게 안내해 주세요. 제가 "다음"이라고 하면 다음 단계로 넘어가 주시고, 중간에 화면에 무엇이 보이는지 물어보면서 진행해 주세요.
+
+1) Claude API 키 (Anthropic) — console.anthropic.com 에서 발급하는 sk-ant- 로 시작하는 키
+2) Google Cloud 음성 인식용 서비스 계정 JSON 키 파일 — Speech-to-Text API 사용
+3) ngrok 인증 토큰과 무료 도메인 — 교인들의 휴대폰에서 접속할 수 있게 하는 용도
+
+먼저 1번부터 시작해 주세요. 결제나 요금이 걱정되면 그 부분도 쉽게 설명해 주세요.`;
+
+  function copyHelpPrompt() {
+    const btn = document.querySelector(".help-btn.copy");
+    const done = () => { if (btn) { const t = btn.textContent; btn.textContent = "✓ 복사됨!"; setTimeout(() => btn.textContent = t, 1800); } };
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = HELP_PROMPT; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { alert("복사에 실패했습니다. Claude 화면에 직접 상황을 설명해 주세요."); }
+      document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(HELP_PROMPT).then(done).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
   // 파일 선택 처리
   let selectedFile = null;
   function handleFileSelect(input) {
