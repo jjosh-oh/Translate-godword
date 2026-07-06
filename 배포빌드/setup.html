@@ -4,96 +4,106 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LiveWord 설정</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
   <style>
+    :root {
+      --bg: #0b0f14; --card: #141a21; --card-2: #0e141a;
+      --border: #222b34; --border-strong: #2f3a45;
+      --text: #e6eaf0; --text-2: #8b95a3; --text-3: #5a6472;
+      --accent: #16baa9; --accent-strong: #0e8e80;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #0f0f0f; color: #e0e0e0;
-      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+      background: var(--bg); color: var(--text);
+      font-family: 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
       min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 24px;
+      padding: 24px; -webkit-font-smoothing: antialiased;
     }
     .card {
-      background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px;
-      padding: 36px 40px; width: 100%; max-width: 540px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+      padding: 38px 42px; width: 100%; max-width: 540px;
     }
-    .logo {
-      text-align: center; margin-bottom: 28px;
+    .logo { text-align: center; margin-bottom: 30px; }
+    .logo .mark {
+      width: 52px; height: 52px; border-radius: 14px; background: var(--accent);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 26px; margin-bottom: 12px;
     }
-    .logo h1 { font-size: 22px; color: #fff; margin-bottom: 4px; }
-    .logo p { font-size: 13px; color: #666; }
+    .logo h1 { font-size: 22px; font-weight: 600; color: var(--text); margin-bottom: 5px; letter-spacing: -0.01em; }
+    .logo p { font-size: 13px; color: var(--text-3); }
 
     .section { margin-bottom: 28px; }
     .section-title {
-      font-size: 13px; font-weight: bold; color: #aaa;
-      text-transform: uppercase; letter-spacing: 0.08em;
-      margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid #2a2a2a;
+      font-size: 12px; font-weight: 600; color: var(--text-2);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-bottom: 15px; padding-bottom: 9px; border-bottom: 1px solid var(--border);
     }
 
-    label { display: block; font-size: 13px; color: #bbb; margin-bottom: 6px; }
-    label span { color: #666; font-weight: normal; }
+    label { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 7px; }
+    label span { color: var(--text-3); font-weight: 400; }
 
     input[type="text"], input[type="password"] {
-      width: 100%; background: #111; border: 1px solid #333;
-      border-radius: 7px; padding: 10px 13px; font-size: 13px; color: #e0e0e0;
-      outline: none; transition: border-color 0.2s;
+      width: 100%; background: var(--card-2); border: 1px solid var(--border-strong);
+      border-radius: 9px; padding: 11px 14px; font-size: 13px; color: var(--text);
+      font-family: inherit; outline: none; transition: border-color 0.2s;
     }
-    input:focus { border-color: #555; }
-    input.ok { border-color: #2d7a2d; }
-    input.err { border-color: #7a2d2d; }
+    input:focus { border-color: var(--accent); }
+    input.ok { border-color: var(--accent); }
+    input.err { border-color: #e24b4a; }
 
     .field { margin-bottom: 16px; }
-    .hint { font-size: 11px; color: #555; margin-top: 5px; }
-    .hint a { color: #5b8fd9; text-decoration: none; }
+    .hint { font-size: 11px; color: var(--text-3); margin-top: 6px; }
+    .hint a { color: var(--accent); text-decoration: none; }
+    .hint a:hover { text-decoration: underline; }
 
     .file-row { display: flex; gap: 8px; align-items: center; }
     .file-row input[type="text"] { flex: 1; }
     .file-btn {
-      padding: 10px 14px; background: #252525; border: 1px solid #333;
-      border-radius: 7px; font-size: 12px; color: #bbb; cursor: pointer;
-      white-space: nowrap; transition: background 0.15s;
+      padding: 11px 15px; background: var(--card-2); border: 1px solid var(--border-strong);
+      border-radius: 9px; font-size: 12px; color: var(--text-2); cursor: pointer;
+      white-space: nowrap; transition: border-color 0.15s, color 0.15s;
     }
-    .file-btn:hover { background: #2e2e2e; }
+    .file-btn:hover { border-color: var(--accent); color: var(--text); }
     #file-input { display: none; }
 
     .test-btn {
-      width: 100%; margin-top: 4px; padding: 9px; border: 1px solid #333;
-      border-radius: 7px; background: #1e1e1e; color: #aaa; font-size: 12px;
-      cursor: pointer; transition: background 0.15s;
+      width: 100%; margin-top: 4px; padding: 10px; border: 1px solid var(--border-strong);
+      border-radius: 9px; background: var(--card-2); color: var(--text-2); font-size: 12px;
+      font-family: inherit; cursor: pointer; transition: border-color 0.15s, color 0.15s;
     }
-    .test-btn:hover { background: #252525; }
+    .test-btn:hover { border-color: var(--accent); color: var(--text); }
 
     .test-result {
-      margin-top: 8px; font-size: 12px; padding: 8px 12px;
-      border-radius: 6px; display: none;
+      margin-top: 8px; font-size: 12px; padding: 9px 13px;
+      border-radius: 8px; display: none;
     }
-    .test-result.ok { background: #0d2a0d; color: #5cb85c; border: 1px solid #1a4a1a; }
-    .test-result.err { background: #2a0d0d; color: #e07070; border: 1px solid #4a1a1a; }
+    .test-result.ok { background: rgba(22,186,169,0.1); color: #34d8c6; border: 1px solid rgba(22,186,169,0.3); }
+    .test-result.err { background: rgba(226,75,74,0.1); color: #e88; border: 1px solid rgba(226,75,74,0.3); }
 
     .save-btn {
-      width: 100%; padding: 13px; background: #2d5a9e; border: none;
-      border-radius: 8px; color: #fff; font-size: 15px; font-weight: bold;
-      cursor: pointer; transition: background 0.2s; margin-top: 4px;
+      width: 100%; padding: 14px; background: var(--accent); border: none;
+      border-radius: 10px; color: #04201c; font-size: 15px; font-weight: 600;
+      font-family: inherit; cursor: pointer; transition: background 0.2s; margin-top: 4px;
     }
-    .save-btn:hover { background: #3568b8; }
-    .save-btn:disabled { background: #1a2a3a; color: #555; cursor: default; }
+    .save-btn:hover { background: #22cbb9; }
+    .save-btn:disabled { background: #1c2a2a; color: #4a5a58; cursor: default; }
 
     .status-msg {
       margin-top: 14px; font-size: 13px; text-align: center; min-height: 20px;
     }
-    .status-msg.ok { color: #5cb85c; }
-    .status-msg.err { color: #e07070; }
+    .status-msg.ok { color: #34d8c6; }
+    .status-msg.err { color: #e88; }
 
-    .already-set {
-      font-size: 11px; color: #2d7a2d; margin-top: 5px;
-    }
+    .already-set { font-size: 11px; color: var(--accent); margin-top: 6px; }
     .goto-op {
-      display: block; text-align: center; margin-top: 20px;
-      font-size: 13px; color: #5b8fd9; text-decoration: none;
+      display: block; text-align: center; margin-top: 22px;
+      font-size: 13px; color: var(--accent); text-decoration: none;
     }
     .goto-op:hover { text-decoration: underline; }
 
     .step-badge {
-      display: inline-block; background: #252525; color: #888;
+      display: inline-block; background: var(--accent-soft, rgba(22,186,169,0.12));
+      color: #34d8c6; border: 1px solid rgba(22,186,169,0.25);
       border-radius: 20px; font-size: 11px; padding: 2px 10px; margin-left: 8px;
     }
   </style>
@@ -101,7 +111,8 @@
 <body>
 <div class="card">
   <div class="logo">
-    <h1>⛪ LiveWord</h1>
+    <div class="mark">⛪</div>
+    <h1>LiveWord</h1>
     <p>처음 사용 시 API 키를 설정해 주세요</p>
   </div>
 
