@@ -1,11 +1,11 @@
-; ChurchInterpreter Inno Setup Script
-; 빌드: iscc ChurchInterpreter.iss
+; LiveWord Inno Setup Script
+; 빌드: iscc LiveWord.iss
 
-#define AppName "ChurchInterpreter"
+#define AppName "LiveWord"
 #define AppVersion "1.0"
 #define AppPublisher "Church"
-#define AppExeName "ChurchInterpreter.exe"
-#define SourceDir "dist\ChurchInterpreter"
+#define AppExeName "LiveWord.exe"
+#define SourceDir "dist\LiveWord"
 
 [Setup]
 AppId={{B7C2A1D4-3F8E-4A9B-B6C5-1D2E3F4A5B6C}
@@ -15,7 +15,7 @@ AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 OutputDir=installer
-OutputBaseFilename=ChurchInterpreter_Setup
+OutputBaseFilename=LiveWord_Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -65,7 +65,7 @@ Name: "{group}\{#AppName} 제거"; Filename: "{uninstallexe}"
 Filename: "{app}\manual.html"; Description: "사용설명서 보기"; Flags: postinstall shellexec skipifsilent unchecked
 
 ; 설치 완료 후 프로그램 실행 (선택)
-Filename: "{app}\{#AppExeName}"; Description: "ChurchInterpreter 바로 실행"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "LiveWord 바로 실행"; Flags: postinstall nowait skipifsilent
 
 [Code]
 // 설치 완료 후 PATH에 app 폴더 추가 (ngrok 실행을 위해)

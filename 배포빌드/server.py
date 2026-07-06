@@ -15,13 +15,13 @@ from dotenv import load_dotenv
 # 실행 위치 판별: .exe로 묶였을 때와 일반 실행을 모두 지원
 #  - BUNDLE_DIR: 화면 파일 등 '내장' 자원 위치 (읽기 전용)
 #  - APP_DIR   : 사용자 파일 위치 (.env, google-key.json, 로그 등)
-#                .exe 실행 시 → .exe 폴더 (쓰기 불가하면 %APPDATA%\ChurchInterpreter)
+#                .exe 실행 시 → .exe 폴더 (쓰기 불가하면 %APPDATA%\LiveWord)
 #                개발 실행 시 → 스크립트 폴더
 if getattr(sys, "frozen", False):
     BUNDLE_DIR = sys._MEIPASS
     # 1순위: .exe 폴더 (설치 위치가 사용자 폴더라 대부분 쓰기 가능,
     #         AppData는 Windows 앱 격리로 접근이 차단되는 경우가 있음)
-    # 2순위: %APPDATA%\ChurchInterpreter
+    # 2순위: %APPDATA%\LiveWord
     _exe_dir = os.path.dirname(sys.executable)
     try:
         _t = os.path.join(_exe_dir, ".write_test")
@@ -31,7 +31,7 @@ if getattr(sys, "frozen", False):
         APP_DIR = _exe_dir
     except Exception:
         APP_DIR = os.path.join(os.environ.get("APPDATA", _exe_dir),
-                               "ChurchInterpreter")
+                               "LiveWord")
         os.makedirs(APP_DIR, exist_ok=True)
 else:
     BUNDLE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1032,7 +1032,7 @@ if __name__ == "__main__":
         webbrowser.open("http://localhost:5000/operator")
         sys.exit(0)
     print("=" * 50)
-    print("  ChurchInterpreter 서버 시작")
+    print("  LiveWord 서버 시작")
     print(f"  설정 파일 위치: {APP_DIR}")
     print("  설정 화면:       http://localhost:5000/setup")
     print("  운영자 대시보드: http://localhost:5000/operator")
