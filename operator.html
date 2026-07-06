@@ -472,9 +472,13 @@
     }
   }
 
-  // 장치 선택 시 이퀄라이저 갱신
+  // 장치 선택 시 이퀄라이저 갱신 + 송출 중이면 새 장치로 마이크 재시작
   document.getElementById("device-select").addEventListener("change", function () {
     startEqualizer(this.value);
+    if (isListening) {
+      stopMic();
+      setTimeout(() => startMic(), 400);
+    }
   });
 
   let isListening = false;
