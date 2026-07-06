@@ -166,8 +166,60 @@ class _Broadcaster:
             self._subs.discard(q)
 
 
-translation_queue = _Broadcaster(_display_subscribers)
 operator_queue = _Broadcaster(_operator_subscribers)
+
+
+class LangHub:
+    """언어별 자막 라우팅 허브.
+    - subscribe(lang): 특정 언어 구독(셀폰) — 그 언어로 번역될 때만 자막 수신
+    - subscribe_primary(): 대표 언어 구독(송출창) — 운영자가 고른 현재 대표 언어 수신
+    실제 구독자가 있는 언어 + 대표 언어만 번역하므로, 아무도 안 고른 언어는 비용 0."""
+    def __init__(self):
+        self._lang_subs = {}       # lang -> set(Queue)  (셀폰: 언어별)
+        self._primary_subs = set() # 송출창: 현재 대표 언어를 따라감
+        self._lock = threading.Lock()
+
+    def subscribe(self, lang):
+        q = queue.Queue()
+        with self._lock:
+            self._lang_subs.setdefault(lang, set()).add(q)
+        return q
+
+    def subscribe_primary(self):
+        q = queue.Queue()
+        with self._lock:
+            self._primary_subs.add(q)
+        return q
+
+    def unsubscribe(self, q):
+        with self._lock:
+            self._primary_subs.discard(q)
+            for subs in self._lang_subs.values():
+                subs.discard(q)
+
+    def publish(self, lang, item, is_primary=False):
+        with self._lock:
+            targets = list(self._lang_subs.get(lang, ()))
+            if is_primary:
+                targets += list(self._primary_subs)
+        for q in targets:
+            q.put(item)
+
+    def broadcast(self, item):
+        """설정 등 모든 구독자에게 공통 전송."""
+        with self._lock:
+            targets = list(self._primary_subs)
+            for subs in self._lang_subs.values():
+                targets += list(subs)
+        for q in targets:
+            q.put(item)
+
+    def active_languages(self):
+        with self._lock:
+            return {lang for lang, subs in self._lang_subs.items() if subs}
+
+
+hub = LangHub()
 
 # Shared display settings
 settings = {
@@ -234,7 +286,7 @@ def _log_translation(src, out):
         pass
 
 
-def translate_and_stream(text: str, target_lang: str, source_lang: str):
+def translate_and_stream(text: str, target_lang: str, source_lang: str, is_primary: bool = True):
     global last_output
     base_instruction = (
         f"You are a professional church interpreter providing live subtitles. "
@@ -271,8 +323,9 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str):
     else:
         system = base_instruction + mapping_text
 
-    translation_queue.put("__clear__")
-    operator_queue.put(("output_clear", ""))
+    hub.publish(target_lang, "__clear__", is_primary)
+    if is_primary:
+        operator_queue.put(("output_clear", ""))
 
     # 출력 폭주 방지: 입력 길이에 비례한 상한(최소 256, 최대 1024 토큰)
     max_out = max(256, min(1024, len(text) * 4))
@@ -286,42 +339,64 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str):
     ) as stream:
         for chunk in stream.text_stream:
             result.append(chunk)
-            translation_queue.put(chunk)
-            operator_queue.put(("output_chunk", chunk))
+            hub.publish(target_lang, chunk, is_primary)
+            if is_primary:
+                operator_queue.put(("output_chunk", chunk))
 
-    last_output = "".join(result)
-    _log_translation(text, last_output)
-    translation_queue.put("__done__")
-    operator_queue.put(("done", ""))
+    out = "".join(result)
+    hub.publish(target_lang, "__done__", is_primary)
+    if is_primary:
+        last_output = out
+        _log_translation(text, out)
+        operator_queue.put(("done", ""))
 
 
 # ===== 번역 작업 큐 (문장 단위 번역을 순서대로 처리) =====
-translation_jobs = queue.Queue()
+# 대표 언어(송출창)와 보조 언어(셀폰의 다른 언어)를 별도 워커로 처리해,
+# 보조 언어 번역이 대표 화면 자막 속도를 늦추지 않도록 한다.
+primary_jobs = queue.Queue()
+secondary_jobs = queue.Queue()
 
 # 음성 세션 관리: 마이크를 끄면 세션이 바뀌어 대기 중 번역이 폐기됨
 _current_session = 0
 _session_lock = threading.Lock()
 
 
-def _translation_worker():
+def _run_job(job, is_primary):
+    text, target_lang, source_lang, session = job
+    # 세션이 유효한 경우에만 번역 (None이면 수동 입력 → 항상 실행)
+    if session is not None:
+        with _session_lock:
+            if session != _current_session:
+                return  # 마이크가 꺼진 뒤의 오래된 작업 → 폐기
+    try:
+        translate_and_stream(text, target_lang, source_lang, is_primary)
+    except Exception as e:
+        print("번역 오류:", e)
+
+
+def _primary_worker():
     while True:
-        text, target_lang, source_lang, session = translation_jobs.get()
-        # 세션이 유효한 경우에만 번역 (None이면 수동 입력 → 항상 실행)
-        if session is not None:
-            with _session_lock:
-                if session != _current_session:
-                    continue  # 마이크가 꺼진 뒤의 오래된 작업 → 폐기
-        try:
-            translate_and_stream(text, target_lang, source_lang)
-        except Exception as e:
-            print("번역 오류:", e)
+        _run_job(primary_jobs.get(), True)
 
 
-threading.Thread(target=_translation_worker, daemon=True).start()
+def _secondary_worker():
+    while True:
+        _run_job(secondary_jobs.get(), False)
 
 
-def enqueue_translation(text, target_lang, source_lang, session=None):
-    translation_jobs.put((text, target_lang, source_lang, session))
+threading.Thread(target=_primary_worker, daemon=True).start()
+threading.Thread(target=_secondary_worker, daemon=True).start()
+
+
+def enqueue_translation(text, source_lang, session=None):
+    """대표 언어 + 현재 셀폰이 구독한 언어들로 번역을 예약.
+    아무도 안 고른 언어는 큐에 들어가지 않으므로 비용이 발생하지 않는다."""
+    primary = settings["target_lang"]
+    primary_jobs.put((text, primary, source_lang, session))
+    for lang in hub.active_languages():
+        if lang != primary:
+            secondary_jobs.put((text, lang, source_lang, session))
 
 
 @app.route("/")
@@ -599,7 +674,7 @@ def audio_socket(ws):
                         for p in pieces:
                             n = p.strip()
                             if n and n not in translated:
-                                enqueue_translation(n, target_lang, source_name, my_session)
+                                enqueue_translation(n, source_name, my_session)
                         translated = []  # 다음 발화 위해 초기화
                     else:
                         operator_queue.put(("interim", transcript.strip()))
@@ -610,7 +685,7 @@ def audio_socket(ws):
                                 n = p.strip()
                                 if n and n not in translated:
                                     translated.append(n)
-                                    enqueue_translation(n, target_lang, source_name, my_session)
+                                    enqueue_translation(n, source_name, my_session)
         except Exception as e:
             operator_queue.put(("stt_error", str(e)[:120]))
             if stop_flag["stop"]:
@@ -636,9 +711,8 @@ def translate():
     last_input = text
     operator_queue.put(("input", text))
 
-    thread = threading.Thread(target=translate_and_stream, args=(text, target_lang, source_lang))
-    thread.daemon = True
-    thread.start()
+    # 대표 언어 + 셀폰이 구독한 언어들로 번역 (수동 입력은 항상 실행)
+    enqueue_translation(text, source_lang, None)
 
     return jsonify({"status": "started"})
 
@@ -773,7 +847,7 @@ def update_settings():
     if request.method == "POST":
         data = request.json
         settings.update({k: v for k, v in data.items() if k in settings})
-        translation_queue.put(("__settings__", settings))
+        hub.broadcast(("__settings__", settings))
     return jsonify(settings)
 
 
@@ -783,8 +857,11 @@ _SSE_PADDING = ":" + (" " * 2048) + "\n\n"
 
 @sock.route("/ws-display")
 def ws_display(ws):
-    """자막 송출용 WebSocket (터널 환경에서 SSE 버퍼링 회피). 송출창+셀폰 공용."""
-    q = translation_queue.subscribe()
+    """자막 송출용 WebSocket. 송출창(대표 언어)+셀폰(선택 언어) 공용.
+    셀폰은 ?lang=English 처럼 언어를 지정하면 그 언어 자막만 받는다.
+    lang이 없으면 대표 언어(운영자 선택)를 따라간다(송출창)."""
+    lang = request.args.get("lang")
+    q = hub.subscribe(lang) if lang else hub.subscribe_primary()
     try:
         ws.send(json.dumps({"type": "settings", "data": settings}))
         while True:
@@ -805,12 +882,12 @@ def ws_display(ws):
     except Exception:
         pass
     finally:
-        translation_queue.unsubscribe(q)
+        hub.unsubscribe(q)
 
 
 @app.route("/stream")
 def stream():
-    q = translation_queue.subscribe()
+    q = hub.subscribe_primary()
 
     def event_stream():
         yield _SSE_PADDING  # 버퍼 강제 비우기
@@ -831,7 +908,7 @@ def stream():
                     escaped = item.replace("\n", "\\n")
                     yield f"data: {escaped}\n\n"
         finally:
-            translation_queue.unsubscribe(q)
+            hub.unsubscribe(q)
 
     return Response(event_stream(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
