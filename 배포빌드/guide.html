@@ -72,17 +72,25 @@
       padding: 12px 20px; font-size: 14px; font-weight: 600; font-family: inherit;
       cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.15);
     }
+    .lang-toggle {
+      position: fixed; top: 22px; left: 20px; font-size: 13px;
+      background: #fff; border: 1px solid var(--line); border-radius: 20px;
+      padding: 6px 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .lang-toggle a { text-decoration: none; color: var(--ink-2); padding: 4px 12px; border-radius: 16px; }
+    .lang-toggle a.on { background: var(--accent); color: #fff; font-weight: 600; }
 
     @media print {
       body { background: #fff; padding: 0; }
       .sheet { box-shadow: none; max-width: 100%; border-radius: 0; padding: 20px 30px; }
-      .print-btn { display: none; }
+      .print-btn, .lang-toggle { display: none; }
       @page { margin: 12mm; }
     }
   </style>
 </head>
 <body>
 
+<div class="lang-toggle"><a href="/guide" class="on">한국어</a><a href="/guide-en">English</a></div>
 <button class="print-btn" onclick="window.print()">🖨 인쇄하기</button>
 
 <div class="sheet">

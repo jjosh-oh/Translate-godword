@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>실시간 자막 안내 — 교인용</title>
+  <title>Live Subtitles Guide — For Attendees</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
   <style>
     :root { --accent: #0e8e80; --ink: #1a2230; --ink-2: #5a6472; --line: #d7ddE3; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       background: #eef1f4; color: var(--ink);
-      font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+      font-family: 'Pretendard', 'Segoe UI', sans-serif;
       -webkit-font-smoothing: antialiased;
       display: flex; justify-content: center; padding: 24px;
     }
@@ -90,19 +90,19 @@
 </head>
 <body>
 
-<div class="lang-toggle"><a href="/guide" class="on">한국어</a><a href="/guide-en">English</a></div>
-<button class="print-btn" onclick="window.print()">🖨 인쇄하기</button>
+<div class="lang-toggle"><a href="/guide">한국어</a><a href="/guide-en" class="on">English</a></div>
+<button class="print-btn" onclick="window.print()">🖨 Print</button>
 
 <div class="sheet">
   <div class="top">
-    <div class="badge">실시간 통역 자막</div>
-    <h1>설교를 <span class="accent">내 언어</span>로<br>휴대폰에서 보세요</h1>
-    <p class="lead">아래 QR코드를 휴대폰 카메라로 비추면<br>설교 자막을 실시간으로 볼 수 있습니다.</p>
+    <div class="badge">Live Translated Subtitles</div>
+    <h1>Follow the sermon in <span class="accent">your language</span><br>on your phone</h1>
+    <p class="lead">Point your phone camera at the QR code below<br>to see the sermon subtitles in real time.</p>
   </div>
 
   <div class="qr-wrap">
-    <img id="qr-img" alt="접속 QR코드" style="display:none">
-    <div id="qr-fallback">프로그램이 실행되고<br>인터넷이 연결되면<br>여기에 QR코드가 나타납니다.</div>
+    <img id="qr-img" alt="Access QR code" style="display:none">
+    <div id="qr-fallback">The QR code will appear here<br>once the program is running<br>and connected to the internet.</div>
     <div class="qr-url" id="qr-url"></div>
     <div class="qr-hint" id="qr-hint"></div>
   </div>
@@ -111,38 +111,38 @@
     <div class="step">
       <div class="num">1</div>
       <div class="step-body">
-        <h3>QR코드를 비추세요</h3>
-        <p>휴대폰 카메라 앱을 열어 위 QR코드를 비추면 링크가 나타납니다.</p>
+        <h3>Scan the QR code</h3>
+        <p>Open your phone's camera app and point it at the QR code above. A link will appear.</p>
       </div>
     </div>
     <div class="step">
       <div class="num">2</div>
       <div class="step-body">
-        <h3>링크를 누르세요</h3>
-        <p>화면에 뜨는 주소를 눌러 자막 화면을 엽니다.</p>
+        <h3>Tap the link</h3>
+        <p>Tap the address that appears to open the subtitle screen.</p>
       </div>
     </div>
     <div class="step">
       <div class="num">3</div>
       <div class="step-body">
-        <h3>언어를 선택하세요 <span class="tag">NEW</span></h3>
-        <p>화면 위쪽의 언어 단추를 눌러 원하는 언어를 고르세요. 사람마다 각자 다른 언어로 볼 수 있습니다. (영어·중국어·일본어·스페인어 등)</p>
+        <h3>Choose your language <span class="tag">NEW</span></h3>
+        <p>Tap the language button at the top of the screen and pick the language you want. Each person can view in a different language. (English, Chinese, Japanese, Spanish, and more)</p>
       </div>
     </div>
     <div class="step">
       <div class="num">4</div>
       <div class="step-body">
-        <h3>자막을 확인하세요</h3>
-        <p>설교가 시작되면 말씀이 실시간으로 번역되어 화면에 표시됩니다.</p>
+        <h3>Watch the subtitles</h3>
+        <p>Once the sermon begins, the message is translated and shown on your screen in real time.</p>
       </div>
     </div>
   </div>
 
   <div class="tips">
-    <b>도움말</b><br>
-    · 글자가 작으면 화면 위쪽의 <b>＋ / －</b> 단추로 크기를 조절하세요.<br>
-    · 자막은 소리 없이 글로만 표시되므로 이어폰이 필요 없습니다.<br>
-    · 접속이 안 되면 와이파이 또는 데이터가 켜져 있는지 확인하세요.
+    <b>Tips</b><br>
+    · If the text is small, use the <b>＋ / －</b> buttons at the top to adjust the size.<br>
+    · Subtitles are text only, so no earphones are needed.<br>
+    · If you can't connect, check that your Wi-Fi or mobile data is turned on.
   </div>
 </div>
 
@@ -157,7 +157,7 @@
     img.style.display = "inline-block";
     document.getElementById("qr-fallback").style.display = "none";
     document.getElementById("qr-url").textContent = mobileUrl;
-    document.getElementById("qr-hint").textContent = "위 주소로 직접 접속해도 됩니다";
+    document.getElementById("qr-hint").textContent = "You can also enter this address directly";
   }
 
   fetch("/tunnel-url").then(r => r.json()).then(d => {
