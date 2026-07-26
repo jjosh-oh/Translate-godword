@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('display.html', '.'), ('operator.html', '.'), ('mobile.html', '.'), ('compare.html', '.'), ('setup.html', '.'), ('glossary.txt', '.')]
+datas = [('display.html', '.'), ('operator.html', '.'), ('mobile.html', '.'), ('compare.html', '.'), ('setup.html', '.'), ('guide.html', '.'), ('glossary.txt', '.')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('google')

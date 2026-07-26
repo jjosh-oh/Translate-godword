@@ -313,6 +313,11 @@ def mobile():
     return send_from_directory(".", "mobile.html")
 
 
+@app.route("/guide")
+def guide():
+    return send_from_directory(".", "guide.html")
+
+
 @app.route("/compare")
 def compare():
     return send_from_directory(".", "compare.html")

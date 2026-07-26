@@ -414,6 +414,11 @@ def mobile():
     return send_from_directory(BUNDLE_DIR, "mobile.html")
 
 
+@app.route("/guide")
+def guide():
+    return send_from_directory(BUNDLE_DIR, "guide.html")
+
+
 @app.route("/compare")
 def compare():
     return send_from_directory(BUNDLE_DIR, "compare.html")
