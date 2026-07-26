@@ -1091,14 +1091,35 @@ def setup_test_google():
         return jsonify(ok=True)
 
 
+def _open_app_window(url):
+    """운영자 화면을 Edge/Chrome '앱 모드'(주소창·탭 없는 독립 창)로 연다.
+    Edge/Chrome이 없으면 기본 브라우저로 폴백."""
+    import subprocess, webbrowser
+    # Windows에 기본 내장된 Edge 우선, 그다음 Chrome
+    candidates = [
+        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+    ]
+    for exe in candidates:
+        if os.path.exists(exe):
+            try:
+                subprocess.Popen([exe, f"--app={url}", "--window-size=1360,900"])
+                return
+            except Exception:
+                pass
+    webbrowser.open(url)  # 폴백: 일반 브라우저
+
+
 def _open_browser():
-    """서버가 뜬 뒤 브라우저를 자동으로 연다. 설정이 안 됐으면 /setup, 됐으면 /operator."""
-    import time, webbrowser
+    """서버가 뜬 뒤 운영자 창을 자동으로 연다. 설정이 안 됐으면 /setup, 됐으면 /operator."""
+    import time
     time.sleep(1.5)  # 서버 기동 대기
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     url = "http://localhost:5000/" + ("operator" if has_key else "setup")
-    print(f"  브라우저 열기: {url}")
-    webbrowser.open(url)
+    print(f"  앱 창 열기: {url}")
+    _open_app_window(url)
 
 
 def _already_running():
@@ -1114,9 +1135,8 @@ def _already_running():
 
 if __name__ == "__main__":
     if _already_running():
-        import webbrowser
         print("프로그램이 이미 실행 중입니다. 기존 화면을 엽니다.")
-        webbrowser.open("http://localhost:5000/operator")
+        _open_app_window("http://localhost:5000/operator")
         sys.exit(0)
     print("=" * 50)
     print("  LiveWord 서버 시작")
