@@ -375,6 +375,7 @@
         <button class="btn btn-start" id="start-btn" onclick="startBroadcast()">▶ 송출 창 열기</button>
         <button class="btn btn-gray" id="mic-btn" onclick="toggleMic()" disabled>🎤 마이크 시작</button>
         <button class="btn btn-gray" id="fs-btn" onclick="fullscreenDisplay()" disabled>⛶ 전체화면</button>
+        <button class="btn btn-gray" id="clear-display-btn" onclick="clearDisplay()">🧹 화면 지우기</button>
         <button class="btn btn-stop" id="stop-btn" onclick="stopBroadcast()" disabled>■ 송출 종료</button>
       </div>
     </div>
@@ -559,6 +560,10 @@
     } else if (msg.type === "stt_error") {
       const ip = document.getElementById("input-preview");
       ip.innerHTML = '<span style="color:#f44336">⚠ 음성인식 오류: ' + msg.data + '</span>';
+    } else if (msg.type === "reset") {
+      inputLines = []; outputLines = [];
+      outputText = ""; isTranslating = false;
+      renderInputPreview(""); renderOutputPreview("");
     } else if (msg.type === "output_clear") {
       outputText = "";
       renderOutputPreview("");
@@ -790,6 +795,13 @@
       displayWindow.focus();
       displayWindow.postMessage("__fullscreen__", "*");
     }
+  }
+
+  // 송출창·셀폰의 누적 자막을 모두 깨끗이 지운다
+  function clearDisplay() {
+    fetch("/clear-display", { method: "POST" }).catch(() => {});
+    const btn = document.getElementById("clear-display-btn");
+    if (btn) { const t = btn.textContent; btn.textContent = "✓ 지웠습니다"; setTimeout(() => btn.textContent = t, 1200); }
   }
 
   function toggleMic() {

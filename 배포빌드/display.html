@@ -173,6 +173,13 @@
       if (msg.type === "ping") return;
       if (msg.type === "settings") {
         applyDisplaySettings(msg.data);
+      } else if (msg.type === "reset") {
+        lines = [];
+        currentText = "";
+        translationPending = false;
+        display.innerHTML = '<span id="empty-msg">통역 대기 중...</span>';
+        display.classList.add("empty");
+        status.textContent = "";
       } else if (msg.type === "clear") {
         if (currentText.trim()) lines.push(currentText.trim());
         currentText = "";

@@ -861,6 +861,17 @@ def update_settings():
     return jsonify(settings)
 
 
+@app.route("/clear-display", methods=["POST"])
+def clear_display():
+    """송출창·셀폰의 누적 자막을 모두 지운다(전체 초기화)."""
+    global last_input, last_output
+    hub.broadcast("__reset__")            # 모든 송출창/셀폰
+    operator_queue.put(("reset", ""))     # 운영자 미리보기
+    last_input = ""
+    last_output = ""
+    return jsonify(ok=True)
+
+
 # Cloudflare 등 프록시의 버퍼링을 깨기 위한 초기 패딩(2KB 주석)
 _SSE_PADDING = ":" + (" " * 2048) + "\n\n"
 
@@ -882,6 +893,8 @@ def ws_display(ws):
                 continue
             if isinstance(item, tuple) and item[0] == "__settings__":
                 msg = {"type": "settings", "data": item[1]}
+            elif item == "__reset__":
+                msg = {"type": "reset"}
             elif item == "__clear__":
                 msg = {"type": "clear"}
             elif item == "__done__":
@@ -910,6 +923,8 @@ def stream():
                     continue
                 if isinstance(item, tuple) and item[0] == "__settings__":
                     yield f"data: __settings__{json.dumps(item[1])}\n\n"
+                elif item == "__reset__":
+                    yield "data: __reset__\n\n"
                 elif item == "__clear__":
                     yield "data: __clear__\n\n"
                 elif item == "__done__":

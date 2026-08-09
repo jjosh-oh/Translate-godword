@@ -235,6 +235,10 @@
       if (msg.type === "ping") return;
       if (msg.type === "settings") {
         applySettings(msg.data);
+      } else if (msg.type === "reset") {
+        lines = [];
+        currentText = "";
+        subtitles.innerHTML = '<div id="empty">통역이 시작되면<br>이곳에 자막이 표시됩니다.</div>';
       } else if (msg.type === "clear") {
         if (currentText.trim()) lines.push(currentText.trim());
         currentText = "";
