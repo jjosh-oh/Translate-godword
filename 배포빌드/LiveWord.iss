@@ -44,8 +44,9 @@ Source: "{#SourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignorever
 ; ngrok (dist 폴더에 ngrok.exe가 있을 경우 포함)
 Source: "ngrok.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
-; 사용설명서
+; 사용설명서 (한국어 + 영문)
 Source: "manual.html"; DestDir: "{app}"; Flags: ignoreversion
+Source: "manual-en.html"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; 기본 용어집 (없으면 서버가 내장 파일 사용)
 Source: "glossary.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
@@ -56,7 +57,8 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 
 ; 시작 메뉴
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Comment: "실시간 설교 동시통역"
-Name: "{group}\사용설명서"; Filename: "{app}\manual.html"
+Name: "{group}\사용설명서 (한국어)"; Filename: "{app}\manual.html"
+Name: "{group}\User Manual (English)"; Filename: "{app}\manual-en.html"
 Name: "{group}\설정 화면 열기"; Filename: "http://localhost:5000/setup"
 Name: "{group}\{#AppName} 제거"; Filename: "{uninstallexe}"
 

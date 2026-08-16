@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LiveWord User Manual</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', 'Segoe UI', sans-serif;
+      font-size: 14px; line-height: 1.8; color: #222;
+      background: #fff; max-width: 860px; margin: 0 auto; padding: 40px 32px;
+    }
+    h1 { font-size: 26px; color: #1a3a6a; border-bottom: 3px solid #1a3a6a; padding-bottom: 10px; margin-bottom: 6px; }
+    .subtitle { color: #666; font-size: 13px; margin-bottom: 36px; }
+    h2 { font-size: 18px; color: #1a3a6a; margin: 36px 0 12px; padding-left: 10px; border-left: 4px solid #1a3a6a; }
+    h3 { font-size: 14px; font-weight: bold; color: #333; margin: 20px 0 8px; }
+    p { margin-bottom: 10px; }
+    ul, ol { margin: 8px 0 12px 22px; }
+    li { margin-bottom: 5px; }
+    .step { background: #f4f8ff; border: 1px solid #c8d8f0; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+    .step-num { display: inline-block; background: #1a3a6a; color: #fff; border-radius: 50%; width: 24px; height: 24px; line-height: 24px; text-align: center; font-size: 12px; font-weight: bold; margin-right: 8px; }
+    .step-title { font-weight: bold; font-size: 14px; }
+    .warn { background: #fff8e1; border-left: 4px solid #f0a500; padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; font-size: 13px; }
+    .tip { background: #e8f5e9; border-left: 4px solid #388e3c; padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; font-size: 13px; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: Consolas, monospace; font-size: 13px; }
+    .url { color: #1a5db8; word-break: break-all; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+    th { background: #1a3a6a; color: #fff; padding: 8px 12px; text-align: left; }
+    td { border: 1px solid #ddd; padding: 8px 12px; }
+    tr:nth-child(even) td { background: #f8f9fc; }
+    .page-break { page-break-after: always; }
+    .cover { text-align: center; padding: 60px 0 40px; }
+    .cover .logo { font-size: 48px; margin-bottom: 16px; }
+    .cover h1 { font-size: 32px; border: none; display: inline-block; }
+    .cover .ver { color: #888; font-size: 13px; margin-top: 8px; }
+    .toc { background: #f8f9fc; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px 24px; margin: 24px 0; }
+    .toc h3 { margin-top: 0; color: #1a3a6a; }
+    .toc ol { margin-left: 18px; }
+    .toc li { margin-bottom: 4px; color: #1a5db8; }
+    @media print { body { padding: 20px; font-size: 13px; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo">⛪</div>
+  <h1>LiveWord</h1>
+  <p style="font-size:16px;color:#555;margin-top:8px">Real-time sermon translation & subtitles</p>
+  <p class="ver">User Manual v1.0</p>
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li>Overview</li>
+    <li>Installation</li>
+    <li>Getting API keys (one-time)</li>
+    <li>First run — setup screen</li>
+    <li>Weekly use</li>
+    <li>Screens explained</li>
+    <li>FAQ</li>
+  </ol>
+</div>
+
+<div class="no-print" style="text-align:right;margin-bottom:24px">
+  <button onclick="window.print()" style="padding:8px 18px;background:#1a3a6a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨 Save as PDF / Print</button>
+</div>
+
+<div class="page-break"></div>
+
+<!-- 1. Overview -->
+<h2>1. Overview</h2>
+<p>LiveWord translates the preacher's speech in real time and shows subtitles at the same time on a
+projector and on the congregation's smartphones.</p>
+
+<table>
+  <tr><th>Feature</th><th>Description</th></tr>
+  <tr><td>Real-time translation</td><td>Subtitles appear as soon as the speaker finishes a sentence</td></tr>
+  <tr><td>Projector display</td><td>Dedicated screen with adjustable font size and colors</td></tr>
+  <tr><td>Phone access</td><td>Congregants view subtitles on their phones via a QR code</td></tr>
+  <tr><td>Per-phone language</td><td>Each person picks their own language on their own phone</td></tr>
+  <tr><td>Sermon script</td><td>Upload a PDF/Word script to improve translation accuracy</td></tr>
+  <tr><td>Glossary & name map</td><td>Improve name recognition; fix name translations (e.g. 요한=John)</td></tr>
+  <tr><td>Handout & poster</td><td>Print a congregant handout / poster with the QR and languages</td></tr>
+  <tr><td>Languages</td><td>English, Japanese, Chinese, Spanish, French, German, Arabic, Korean</td></tr>
+</table>
+
+<!-- 2. Installation -->
+<h2>2. Installation</h2>
+
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">Run the installer</span>
+  <p style="margin-top:8px">Double-click <code>LiveWord_Setup.exe</code>.
+  If a "Windows protected your PC" warning appears, click <strong>More info → Run anyway</strong>.</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">Choose the install location</span>
+  <p style="margin-top:8px">Keep the default folder or choose another, then click <strong>Install</strong>.</p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">Finish</span>
+  <p style="margin-top:8px">A <strong>LiveWord</strong> icon is created on the desktop.</p>
+</div>
+<div class="step">
+  <span class="step-num">4</span><span class="step-title">Clear the Windows security warning (first time only)</span>
+  <p style="margin-top:8px">On first launch, Windows <strong>Smart App Control</strong> may block the app because it isn't code-signed. To allow it:</p>
+  <ol style="margin-top:6px;margin-left:20px;line-height:2">
+    <li>Click the Windows <strong>Start</strong> button</li>
+    <li>Search for <strong>"Smart App Control"</strong> and open it</li>
+    <li>Set it to <strong>Off</strong></li>
+    <li>Double-click the <strong>LiveWord</strong> desktop icon again</li>
+  </ol>
+  <p style="margin-top:8px;color:#888;font-size:12px">💡 This is a one-time step; the app runs without warnings afterward.</p>
+</div>
+
+<div class="warn">⚠ On first launch you must enter API keys. Read section 3 first and have your keys ready.</div>
+
+<!-- 3. API keys -->
+<h2>3. Getting API keys (one-time)</h2>
+<p>The app uses two external services. You need a key from each.</p>
+
+<h3>① Anthropic Claude API key (for translation)</h3>
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">Sign up</span>
+  <p style="margin-top:8px"><span class="url">https://console.anthropic.com</span> → <strong>Sign Up</strong> (or <strong>Log In</strong>).</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">Add a payment method & credits</span>
+  <p style="margin-top:8px">Left menu <strong>Billing</strong> → <strong>Add payment method</strong> → enter card details →
+  <strong>Buy credits</strong>.</p>
+  <p style="margin-top:6px;color:#888;font-size:12px">💡 $5–10 is plenty to start. A one-hour weekly service costs roughly $2–5/month.
+  Tip: turn on <strong>Auto reload</strong> so translation never stops mid-service.</p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">Create the API key</span>
+  <p style="margin-top:8px">Left menu <strong>API Keys</strong> → <strong>+ Create Key</strong> → name it →
+  <strong>copy the key</strong> (<code>sk-ant-api03-...</code>) and save it in Notepad (you can't view it again after closing).</p>
+</div>
+<div class="warn">⚠ An API key is like a password. Never share it or email it. If leaked, delete it and create a new one.</div>
+
+<h3>② Google Cloud speech-recognition key</h3>
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">Create a project</span>
+  <p style="margin-top:8px"><span class="url">https://console.cloud.google.com</span> → project dropdown (top) →
+  <strong>New Project</strong> → name it → <strong>Create</strong>, then make sure it's selected.</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">Link a billing account</span>
+  <p style="margin-top:8px">Menu (☰) → <strong>Billing</strong> → <strong>Link a billing account</strong> → add a card.
+  (Light usage may fall within the free tier.)</p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">Enable Speech-to-Text API</span>
+  <p style="margin-top:8px">Search <strong>Cloud Speech-to-Text API</strong> → click <strong>Enable</strong>.</p>
+</div>
+<div class="step">
+  <span class="step-num">4</span><span class="step-title">Create a service account</span>
+  <p style="margin-top:8px">Menu (☰) → <strong>IAM & Admin → Service Accounts</strong> →
+  <strong>+ Create service account</strong> → name it → role <strong>Cloud Speech Client</strong> → <strong>Done</strong>.</p>
+</div>
+<div class="step">
+  <span class="step-num">5</span><span class="step-title">Download the JSON key</span>
+  <p style="margin-top:8px">Open the new service account → <strong>Keys</strong> tab →
+  <strong>Add key → Create new key → JSON → Create</strong>. A <code>.json</code> file downloads — keep it.</p>
+</div>
+<div class="warn">⚠ The JSON key is like a password. Don't email or share it. If lost, delete it and create a new one.</div>
+
+<h3>③ ngrok account (for phone access)</h3>
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">Sign up</span>
+  <p style="margin-top:8px"><span class="url">https://dashboard.ngrok.com</span> → Sign Up (free)</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">Copy your Authtoken</span>
+  <p style="margin-top:8px"><strong>Getting Started → Your Authtoken</strong>, copy the token.</p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">(Optional) Get a fixed domain</span>
+  <p style="margin-top:8px"><strong>Domains → New Domain</strong> — one free fixed domain lets you reuse the same QR every week.</p>
+</div>
+
+<div class="page-break"></div>
+
+<!-- 4. First run -->
+<h2>4. First run — setup screen</h2>
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">Launch</span>
+  <p style="margin-top:8px">Double-click the <strong>LiveWord</strong> desktop icon. A black console window opens and the server starts (don't close it).</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">Open the setup screen</span>
+  <p style="margin-top:8px">An <strong>operator app window</strong> opens automatically (a standalone window with no address bar/tabs).
+  If keys aren't set yet you'll see the setup screen; otherwise the operator dashboard.
+  If nothing opens, type <code>http://localhost:5000/setup</code> in a browser.</p>
+  <div class="tip" style="margin-top:8px">💬 On the setup screen, the <strong>"Copy question → Open Claude"</strong> buttons let free Claude (claude.ai) walk you through getting the API keys step by step.</div>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">Enter the Claude API key</span>
+  <p style="margin-top:8px">Paste the <code>sk-ant-...</code> key and click <strong>Test connection</strong>.</p>
+</div>
+<div class="step">
+  <span class="step-num">4</span><span class="step-title">Upload the Google key file</span>
+  <p style="margin-top:8px">Use <strong>Choose file</strong> to select the downloaded <code>.json</code>, then <strong>Test connection</strong>.</p>
+</div>
+<div class="step">
+  <span class="step-num">5</span><span class="step-title">ngrok settings</span>
+  <p style="margin-top:8px">Enter the Authtoken and, if you have one, the fixed domain.</p>
+</div>
+<div class="step">
+  <span class="step-num">6</span><span class="step-title">Save</span>
+  <p style="margin-top:8px">Click <strong>Save settings</strong> → <strong>Open operator dashboard</strong>.</p>
+</div>
+<div class="tip">✓ Settings are saved in the program folder's <code>.env</code> file and applied automatically next time.</div>
+
+<!-- 5. Weekly use -->
+<h2>5. Weekly use</h2>
+<table>
+  <tr><th>When</th><th>Task</th><th>How</th></tr>
+  <tr><td>Before</td><td>Launch</td><td>Double-click LiveWord (operator app window opens automatically)</td></tr>
+  <tr><td>Before</td><td>Upload sermon script (optional)</td><td>Left panel "Upload script" → pick PDF/Word</td></tr>
+  <tr><td>Before</td><td>Open projector screen</td><td>"▶ Open display window" → move to projector, go fullscreen</td></tr>
+  <tr><td>Before</td><td>Share the QR</td><td>Print it in the bulletin, or use "Handout / Poster" print</td></tr>
+  <tr><td>Start</td><td>Turn on mic</td><td>"🎤 Start mic" button</td></tr>
+  <tr><td>During</td><td>Watch subtitles</td><td>On the projector and on phones</td></tr>
+  <tr><td>During</td><td>Tidy the screen (optional)</td><td>"🧹 Clear screen" to wipe subtitles between segments</td></tr>
+  <tr><td>After</td><td>Turn off mic</td><td>"⏹ Stop mic" button</td></tr>
+  <tr><td>After</td><td>Quit</td><td>Close the console window or press Ctrl+C</td></tr>
+</table>
+
+<!-- 6. Screens -->
+<h2>6. Screens explained</h2>
+
+<h3>Operator dashboard (<code>/operator</code>)</h3>
+<ul>
+  <li><strong>Open display window</strong> — opens the projector subtitle screen (can be reopened anytime)</li>
+  <li><strong>Start/Stop mic</strong> — begin/stop interpreting. Changing the audio input device applies immediately.</li>
+  <li><strong>🧹 Clear screen</strong> — instantly wipes accumulated subtitles on the projector and all phones (handy between service segments)</li>
+  <li><strong>Language</strong> — change source / primary target language. Takes effect from the next sentence even mid-service.</li>
+  <li><strong>Upload script</strong> — a PDF/Word sermon script improves accuracy</li>
+  <li><strong>Glossary</strong> — add church-specific names to improve speech recognition. Uploading adds new words to the existing list (existing kept).</li>
+  <li><strong>Name/term map</strong> — fix how specific words are translated (format: <code>한글=English</code>, e.g. <code>요한=John</code>).</li>
+  <li><strong>Display settings</strong> — font size, text/background color (live on the projector)</li>
+  <li><strong>QR / Handout · Poster</strong> — the phone-access QR, plus buttons to print a <strong>congregant handout (with QR)</strong> and a <strong>custom poster</strong></li>
+</ul>
+
+<h3>Projector (display) screen (<code>/</code>)</h3>
+<ul>
+  <li>Double-click or F11 — toggle fullscreen</li>
+  <li>Subtitles stack upward; older lines scroll off the top</li>
+  <li>Shows the operator's primary language</li>
+</ul>
+
+<h3>Congregant phone screen (<code>/mobile</code>)</h3>
+<ul>
+  <li>Connect by scanning the QR</li>
+  <li><strong>Language picker</strong> — each person can choose their own language (English, Chinese, Japanese, Spanish, French, German, Arabic, Korean)</li>
+  <li><strong>＋ / －</strong> buttons to adjust text size</li>
+  <li>Keeps the screen awake automatically</li>
+</ul>
+
+<h3>Printables</h3>
+<ul>
+  <li><strong>Congregant handout</strong> (<code>/guide</code>) — a one-page sheet with the QR, language selection, and how-to. Korean/English toggle; print or save as PDF.</li>
+  <li><strong>Poster maker</strong> (<code>/poster</code>) — <strong>upload your church logo</strong> and enter the church name & website; the poster is built with your branding. Logo/name are saved on this computer for next time. QR, languages, and title fill in automatically; prints on one Letter-landscape page.</li>
+</ul>
+
+<!-- 7. FAQ -->
+<h2>7. FAQ</h2>
+
+<h3>Q. Translation feels slow</h3>
+<p>Depending on internet speed and API load, expect a 0.5–3 second delay. A wired connection is recommended.</p>
+
+<h3>Q. Can each person see a different language?</h3>
+<p>Yes. After scanning the QR, each person taps the <strong>language button</strong> at the top of their phone screen.
+Different people can watch in different languages at once. The projector shows the operator's primary language.</p>
+<p style="margin-top:6px;color:#888;font-size:12px">Cost note: only languages that <em>someone actually selects</em> are translated. Unused languages cost nothing.</p>
+
+<h3>Q. How do I fix how a name/place is translated?</h3>
+<p>On the dashboard → <strong>Name/term map</strong>, add one per line as <code>한글=English</code> (e.g. <code>요한=John</code>).</p>
+
+<h3>Q. The screen is cluttered with old subtitles</h3>
+<p>Click <strong>🧹 Clear screen</strong> on the dashboard to wipe the projector and all phones at once.</p>
+
+<h3>Q. I want a poster with our church logo</h3>
+<p>Dashboard QR area → <strong>🖼 Poster maker</strong> → upload your logo, enter church name & website → print / save as PDF.
+Your logo and name are saved on this computer for next time.</p>
+
+<h3>Q. Names or place names are recognized incorrectly</h3>
+<p>Add them via <strong>Glossary</strong>. Format: one word per line in a <code>.txt</code>, <code>.pdf</code>, or <code>.docx</code> file.
+Uploading keeps the existing list and adds new words (duplicates removed automatically).</p>
+
+<h3>Q. Phones can't connect after scanning the QR</h3>
+<p>Make sure ngrok is set up. The QR area on the dashboard should show an address.</p>
+
+<h3>Q. I accidentally closed the black console window</h3>
+<p>Double-click the desktop icon again to restart the program.</p>
+
+<h3>Q. How do I change an API key?</h3>
+<p>Open <code>http://localhost:5000/setup</code> in a browser, enter the new key, and save.</p>
+
+<h3>Q. How much does translation cost?</h3>
+<p>Roughly $2–5 for a one-hour weekly service. Check real-time usage in the Anthropic console.</p>
+
+<hr style="margin:40px 0;border:none;border-top:1px solid #ddd">
+<p style="text-align:center;color:#aaa;font-size:12px">LiveWord v1.0 — Contact your developer for support</p>
+
+</body>
+</html>
