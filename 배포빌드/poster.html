@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>통역 안내 포스터 만들기</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+  <style>
+    :root{ --navy:#1b2a63; --blue:#3f63c9; --blue-2:#5f7fd6; --lt:#eaf0fb; --ink:#1a2230; --ink-2:#5a6472; --line:#d7ddE3; }
+    *{ margin:0; padding:0; box-sizing:border-box; }
+    body{ background:#dfe4ea; font-family:'Pretendard','Segoe UI',sans-serif; -webkit-font-smoothing:antialiased;
+          display:flex; flex-direction:column; align-items:center; padding:20px; }
+
+    /* 편집 툴바 (인쇄 시 숨김) */
+    .toolbar{ width:1120px; max-width:100%; background:#fff; border:1px solid var(--line); border-radius:12px;
+              padding:14px 18px; margin-bottom:18px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    .toolbar .grp{ display:flex; align-items:center; gap:6px; }
+    .toolbar label{ font-size:12px; color:var(--ink-2); font-weight:600; }
+    .toolbar input[type=text]{ border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px;
+                               font-family:inherit; outline:none; }
+    .toolbar input[type=text]:focus{ border-color:var(--blue); }
+    .tbtn{ border:1px solid var(--line); background:#fff; border-radius:8px; padding:8px 14px; font-size:13px;
+           font-weight:600; font-family:inherit; cursor:pointer; color:var(--ink); }
+    .tbtn:hover{ border-color:var(--blue); }
+    .tbtn.primary{ background:var(--blue); color:#fff; border-color:var(--blue); }
+    .toolbar .hint{ width:100%; font-size:11px; color:var(--ink-2); }
+    #logo-input{ display:none; }
+
+    .poster{ width:1120px; background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.15); }
+    .band{ background:var(--navy); color:#fff; display:flex; align-items:center; gap:20px; padding:20px 34px; }
+    .logo-tile{ background:#fff; border-radius:14px; padding:10px 14px; flex-shrink:0; display:flex; align-items:center;
+                min-width:88px; min-height:66px; justify-content:center; }
+    .logo-tile img{ height:64px; max-width:220px; display:block; object-fit:contain; }
+    .logo-tile .ph{ font-size:12px; color:#9aa3b8; text-align:center; line-height:1.4; }
+    .band h2{ font-size:28px; font-weight:800; letter-spacing:.01em; }
+    .band .right{ margin-left:auto; text-align:right; font-size:13px; color:#aebbe6; line-height:1.5; }
+
+    .title{ text-align:center; padding:28px 20px 6px; }
+    .title h1{ color:var(--blue); font-size:40px; font-weight:800; line-height:1.15; letter-spacing:-0.01em; }
+    .title .ko{ color:var(--ink-2); font-size:17px; font-weight:600; margin-top:8px; }
+
+    .body{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; padding:16px 34px 6px; }
+    .col{ padding:14px 16px; }
+    .step-no{ color:var(--blue); font-weight:800; font-size:15px; }
+    .step-t{ font-size:19px; font-weight:700; margin:2px 0 12px; }
+
+    .qr-box{ text-align:center; }
+    .qr-box img{ width:250px; height:250px; border:1px solid #e3e8f0; border-radius:12px; padding:8px; background:#fff; }
+    .qr-box .ph{ width:250px; height:250px; margin:0 auto; border:2px dashed var(--line); border-radius:12px;
+                 display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:13px; text-align:center; padding:20px; }
+    .qr-url{ margin-top:10px; font-size:12px; color:var(--blue); word-break:break-all; font-weight:600; }
+
+    .kr-en{ display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:16px; }
+    .pill{ background:var(--lt); color:var(--navy); font-weight:800; font-size:18px; padding:6px 14px; border-radius:12px; }
+    .globe{ width:38px; height:38px; }
+    .langs{ list-style:none; display:flex; flex-direction:column; gap:9px; align-items:flex-start; padding-left:8px; }
+    .langs li{ display:flex; align-items:center; gap:11px; font-size:19px; color:var(--ink); }
+    .dot{ width:17px; height:17px; border-radius:50%; border:2px solid var(--blue-2); flex-shrink:0; }
+    .langs li.on{ color:var(--blue); font-weight:800; }
+    .langs li.on .dot{ border-color:var(--blue); background:var(--blue); box-shadow:inset 0 0 0 3px #fff; }
+
+    .phone-ill{ display:flex; justify-content:center; margin-bottom:6px; }
+    .phone-ill svg{ width:150px; height:150px; }
+    .s3card{ background:var(--lt); border-radius:14px; padding:16px 18px; }
+    .s3card .hd{ background:var(--blue); color:#fff; font-weight:800; font-size:15px; padding:8px 12px; border-radius:10px; display:inline-block; margin-bottom:10px; }
+    .s3card p{ font-size:15px; color:var(--ink); line-height:1.5; }
+    .s3card .li{ font-size:13px; color:var(--ink-2); margin-top:8px; }
+
+    .foot{ background:var(--navy); color:#fff; display:flex; align-items:center; gap:14px; padding:16px 34px; margin-top:10px; }
+    .foot .more{ font-size:18px; font-weight:700; }
+    .foot .web{ margin-left:auto; font-size:20px; font-weight:800; letter-spacing:.02em; }
+
+    @media print{
+      @page{ size:letter landscape; margin:5mm; }
+      html,body{ background:#fff; padding:0; margin:0; }
+      .toolbar{ display:none; }
+      .poster{ box-shadow:none; border-radius:0; width:1120px; zoom:0.88;
+               -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="grp">
+    <input type="file" id="logo-input" accept="image/*" onchange="onLogoPick(event)">
+    <button class="tbtn" onclick="document.getElementById('logo-input').click()">🖼 로고 선택</button>
+    <button class="tbtn" onclick="clearLogo()">로고 제거</button>
+  </div>
+  <div class="grp">
+    <label>교회 이름</label>
+    <input type="text" id="in-church" placeholder="OUR CHURCH" oninput="onField()" style="width:200px;">
+  </div>
+  <div class="grp">
+    <label>웹사이트</label>
+    <input type="text" id="in-web" placeholder="www.example.org" oninput="onField()" style="width:200px;">
+  </div>
+  <button class="tbtn primary" onclick="window.print()" style="margin-left:auto;">🖨 인쇄 / PDF 저장</button>
+  <div class="hint">· 로고·교회 이름·웹사이트는 이 컴퓨터에 저장되어 다음에도 유지됩니다. · QR과 언어 목록은 프로그램에서 자동으로 채워집니다.</div>
+</div>
+
+<div class="poster" id="poster">
+  <div class="band">
+    <div class="logo-tile" id="logo-tile"><span class="ph">여기에<br>교회 로고</span></div>
+    <h2 id="hdr-church">OUR CHURCH</h2>
+    <div class="right">실시간 통역 자막<br>Live Translated Subtitles</div>
+  </div>
+
+  <div class="title">
+    <h1 id="title-main">KOREAN → ENGLISH<br>SIMULTANEOUS TRANSLATION SERVICE</h1>
+    <div class="ko">설교를 원하는 언어의 실시간 자막으로 보세요</div>
+  </div>
+
+  <div class="body">
+    <div class="col qr-box">
+      <img id="qr-img" alt="접속 QR코드" style="display:none">
+      <div id="qr-ph" class="ph">프로그램 실행 시<br>QR코드가<br>여기에 표시됩니다</div>
+      <div class="qr-url" id="qr-url"></div>
+      <div class="step-no" style="margin-top:14px;">1</div>
+      <div class="step-t">Scan the QR code<br>to connect</div>
+    </div>
+
+    <div class="col">
+      <div class="step-no">2</div>
+      <div class="step-t" style="margin-bottom:14px;">Select your language</div>
+      <div class="kr-en">
+        <span class="pill" id="pill-src">KR</span>
+        <svg class="globe" viewBox="0 0 24 24" fill="none" stroke="#3f63c9" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg>
+        <span class="pill" id="pill-tgt" style="background:#3f63c9; color:#fff;">EN</span>
+      </div>
+      <ul class="langs" id="langs">
+        <li class="on"><span class="dot"></span>English</li>
+        <li><span class="dot"></span>한국어</li>
+        <li><span class="dot"></span>日本語</li>
+        <li><span class="dot"></span>中文</li>
+        <li><span class="dot"></span>Español</li>
+        <li><span class="dot"></span>Français</li>
+        <li><span class="dot"></span>Deutsch</li>
+        <li><span class="dot"></span>العربية</li>
+      </ul>
+    </div>
+
+    <div class="col">
+      <div class="phone-ill">
+        <svg viewBox="0 0 120 120" fill="none">
+          <rect x="34" y="12" width="52" height="96" rx="9" fill="#eaf0fb" stroke="#3f63c9" stroke-width="2.5"/>
+          <rect x="42" y="26" width="36" height="6" rx="3" fill="#3f63c9"/>
+          <rect x="42" y="40" width="30" height="5" rx="2.5" fill="#9db2e6"/>
+          <rect x="42" y="52" width="36" height="5" rx="2.5" fill="#9db2e6"/>
+          <rect x="42" y="64" width="26" height="5" rx="2.5" fill="#9db2e6"/>
+          <circle cx="60" cy="96" r="4" fill="#3f63c9"/>
+        </svg>
+      </div>
+      <div class="step-no">3</div>
+      <div class="step-t">Read real-time translation</div>
+      <div class="s3card">
+        <span class="hd">REAL-TIME CAPTIONS</span>
+        <p>Read the translation of the sermon on your phone as it is spoken.</p>
+        <div class="li">· Text captions — no earphones needed.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="more">For more information</div>
+    <div class="web" id="foot-web">www.example.org</div>
+  </div>
+</div>
+
+<script>
+  const LANG_CODE = { English:"EN", Korean:"KR", Japanese:"JP", Chinese:"ZH", Spanish:"ES",
+                      French:"FR", German:"DE", Arabic:"AR" };
+
+  // ── 저장된 브랜딩 불러오기 (이 컴퓨터) ──
+  function load(k, d){ try { return localStorage.getItem(k) || d; } catch(e){ return d; } }
+  function save(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+  function applyChurch(name){
+    const n = (name || "OUR CHURCH").trim() || "OUR CHURCH";
+    document.getElementById("hdr-church").textContent = n;
+  }
+  function applyWeb(w){
+    const v = (w || "").trim();
+    document.getElementById("foot-web").textContent = v || "www.example.org";
+  }
+  function applyLogo(dataUrl){
+    const tile = document.getElementById("logo-tile");
+    if (dataUrl) {
+      tile.innerHTML = '<img src="'+dataUrl+'" alt="church logo">';
+    } else {
+      tile.innerHTML = '<span class="ph">여기에<br>교회 로고</span>';
+    }
+  }
+
+  // 초기값
+  const savedChurch = load("lw_poster_church","");
+  const savedWeb = load("lw_poster_web","");
+  const savedLogo = load("lw_poster_logo","");
+  document.getElementById("in-church").value = savedChurch;
+  document.getElementById("in-web").value = savedWeb;
+  applyChurch(savedChurch); applyWeb(savedWeb); applyLogo(savedLogo);
+
+  function onField(){
+    const c = document.getElementById("in-church").value;
+    const w = document.getElementById("in-web").value;
+    save("lw_poster_church", c); save("lw_poster_web", w);
+    applyChurch(c); applyWeb(w);
+  }
+  function onLogoPick(e){
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { save("lw_poster_logo", r.result); applyLogo(r.result); };
+    r.readAsDataURL(f);
+  }
+  function clearLogo(){ save("lw_poster_logo",""); applyLogo(""); }
+
+  // ── 제목·언어 강조: 서버 설정(원본→번역 언어) 반영 ──
+  fetch("/settings").then(r=>r.json()).then(s => {
+    const src = (s.source_lang || "Korean"), tgt = (s.target_lang || "English");
+    document.getElementById("title-main").innerHTML =
+      src.toUpperCase() + " → " + tgt.toUpperCase() + "<br>SIMULTANEOUS TRANSLATION SERVICE";
+    document.getElementById("pill-src").textContent = LANG_CODE[src] || src.slice(0,2).toUpperCase();
+    document.getElementById("pill-tgt").textContent = LANG_CODE[tgt] || tgt.slice(0,2).toUpperCase();
+    // 대표 언어를 목록에서 강조
+    document.querySelectorAll("#langs li").forEach(li => {
+      const on = li.textContent.trim() === tgt || (tgt==="English" && li.textContent.trim()==="English");
+      li.classList.toggle("on", li.textContent.trim() === tgt);
+    });
+  }).catch(()=>{});
+
+  // ── QR: 실행 중이면 실제 접속 주소 표시 ──
+  function makeQR(mobileUrl){
+    const img = document.getElementById("qr-img");
+    img.onerror = function(){ img.onerror=null; img.src="https://quickchart.io/qr?size=520&text="+encodeURIComponent(mobileUrl); };
+    img.src = "https://api.qrserver.com/v1/create-qr-code/?size=520x520&data="+encodeURIComponent(mobileUrl);
+    img.style.display="inline-block";
+    document.getElementById("qr-ph").style.display="none";
+    document.getElementById("qr-url").textContent = mobileUrl;
+  }
+  fetch("/tunnel-url").then(r=>r.json()).then(d => {
+    if (d.url) makeQR(d.url.replace(/\/+$/,"") + "/mobile");
+  }).catch(()=>{});
+</script>
+
+</body>
+</html>

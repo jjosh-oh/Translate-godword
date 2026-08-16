@@ -323,6 +323,11 @@ def guide_en():
     return send_from_directory(".", "guide-en.html")
 
 
+@app.route("/poster")
+def poster():
+    return send_from_directory(".", "poster.html")
+
+
 @app.route("/compare")
 def compare():
     return send_from_directory(".", "compare.html")

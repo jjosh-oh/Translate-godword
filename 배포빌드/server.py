@@ -424,6 +424,11 @@ def guide_en():
     return send_from_directory(BUNDLE_DIR, "guide-en.html")
 
 
+@app.route("/poster")
+def poster():
+    return send_from_directory(BUNDLE_DIR, "poster.html")
+
+
 @app.route("/compare")
 def compare():
     return send_from_directory(BUNDLE_DIR, "compare.html")

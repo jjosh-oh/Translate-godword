@@ -392,8 +392,12 @@
         </div>
       </div>
       <div id="qr-area" style="display:none;"></div>
-      <button class="btn btn-gray" style="margin-top:12px; width:auto;"
-              onclick="window.open('/guide','_blank')">🖨 교인용 안내문 인쇄 (QR 포함)</button>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button class="btn btn-gray" style="width:auto;"
+                onclick="window.open('/guide','_blank')">🖨 교인용 안내문 (QR)</button>
+        <button class="btn btn-gray" style="width:auto;"
+                onclick="window.open('/poster','_blank')">🖼 포스터 만들기 (로고 삽입)</button>
+      </div>
     </div>
 
     <!-- 화면 설정 -->
