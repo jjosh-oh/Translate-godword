@@ -101,8 +101,11 @@
   <tr><td>실시간 통역</td><td>설교자 말이 끝나는 즉시 번역 자막 표시</td></tr>
   <tr><td>빔프로젝터 송출</td><td>글자 크기·색상 조절 가능한 전용 화면</td></tr>
   <tr><td>셀폰 접속</td><td>QR코드로 교인 스마트폰에서 자막 확인</td></tr>
+  <tr><td>셀폰별 언어 선택</td><td>교인마다 자기 휴대폰에서 원하는 언어를 골라 시청</td></tr>
   <tr><td>설교 원고 활용</td><td>PDF/Word 원고 업로드 시 번역 정확도 향상</td></tr>
-  <tr><td>다국어 지원</td><td>영어, 일본어, 중국어, 스페인어 등</td></tr>
+  <tr><td>용어집·번역 대응표</td><td>고유명사 인식 향상, 이름 번역 지정(예: 요한=John)</td></tr>
+  <tr><td>안내문·포스터 인쇄</td><td>QR·언어 안내를 교인용 안내문/포스터로 인쇄</td></tr>
+  <tr><td>다국어 지원</td><td>영어, 일본어, 중국어, 스페인어, 프랑스어, 독일어, 아랍어</td></tr>
 </table>
 
 <!-- 2. 설치 -->
@@ -260,8 +263,11 @@
 </div>
 <div class="step">
   <span class="step-num">2</span><span class="step-title">설정 화면 열기</span>
-  <p style="margin-top:8px">자동으로 브라우저가 열리거나, 주소창에 입력:<br>
-  <code>http://localhost:5000/setup</code></p>
+  <p style="margin-top:8px">잠시 후 <strong>운영자 앱 창</strong>이 자동으로 열립니다(주소창·탭 없는 독립 창).
+  처음이라 키가 없으면 설정 화면이, 설정이 끝났으면 운영자 대시보드가 열립니다.<br>
+  안 열리면 브라우저 주소창에 직접 입력: <code>http://localhost:5000/setup</code></p>
+  <div class="tip" style="margin-top:8px">💬 설정 화면 상단의 <strong>"질문 복사 → Claude 열기"</strong> 버튼을 쓰면,
+  무료 Claude(claude.ai)가 API 키 발급 과정을 단계별로 안내해 줍니다.</div>
 </div>
 <div class="step">
   <span class="step-num">3</span><span class="step-title">Claude API 키 입력</span>
@@ -287,14 +293,14 @@
 
 <table>
   <tr><th>순서</th><th>할 일</th><th>방법</th></tr>
-  <tr><td>예배 전</td><td>프로그램 실행</td><td>바탕화면 LiveWord 더블클릭</td></tr>
-  <tr><td>예배 전</td><td>운영자 대시보드 열기</td><td><code>http://localhost:5000/operator</code></td></tr>
+  <tr><td>예배 전</td><td>프로그램 실행</td><td>바탕화면 LiveWord 더블클릭 (운영자 앱 창 자동 실행)</td></tr>
   <tr><td>예배 전</td><td>설교 원고 업로드 (선택)</td><td>대시보드 좌측 "원고 업로드" → PDF/Word 선택</td></tr>
-  <tr><td>예배 전</td><td>빔프로젝터 화면 열기</td><td><code>http://localhost:5000</code> → 더블클릭으로 전체화면</td></tr>
-  <tr><td>예배 전</td><td>셀폰 QR 안내</td><td>대시보드 우측 QR코드를 주보에 인쇄하거나 화면에 표시</td></tr>
-  <tr><td>예배 시작</td><td>마이크 켜기</td><td>대시보드 "🎤 마이크 켜기" 버튼</td></tr>
+  <tr><td>예배 전</td><td>빔프로젝터 화면 열기</td><td>대시보드 "▶ 송출 창 열기" → 프로젝터로 옮겨 전체화면</td></tr>
+  <tr><td>예배 전</td><td>셀폰 QR 안내</td><td>QR을 주보에 인쇄하거나 "안내문/포스터 인쇄"로 배포</td></tr>
+  <tr><td>예배 시작</td><td>마이크 켜기</td><td>대시보드 "🎤 마이크 시작" 버튼</td></tr>
   <tr><td>예배 중</td><td>자막 확인</td><td>빔프로젝터 화면 및 셀폰에서 실시간 자막 확인</td></tr>
-  <tr><td>예배 후</td><td>마이크 끄기</td><td>대시보드 "⏹ 마이크 끄기" 버튼</td></tr>
+  <tr><td>예배 중</td><td>화면 정리 (선택)</td><td>순서가 바뀔 때 "🧹 화면 지우기"로 자막 비우기</td></tr>
+  <tr><td>예배 후</td><td>마이크 끄기</td><td>대시보드 "⏹ 마이크 중지" 버튼</td></tr>
   <tr><td>예배 후</td><td>프로그램 종료</td><td>콘솔 창 닫기 또는 Ctrl+C</td></tr>
 </table>
 
@@ -303,24 +309,36 @@
 
 <h3>운영자 대시보드 (<code>/operator</code>)</h3>
 <ul>
-  <li><strong>마이크 켜기/끄기</strong> — 통역 시작·중지</li>
-  <li><strong>언어 선택</strong> — 원본/번역 언어 변경</li>
+  <li><strong>송출 창 열기</strong> — 빔프로젝터용 자막 화면을 새 창으로 엶 (송출 중에도 바꿀 수 있음)</li>
+  <li><strong>마이크 켜기/끄기</strong> — 통역 시작·중지. 오디오 입력 장치를 바꾸면 즉시 적용됩니다.</li>
+  <li><strong>🧹 화면 지우기</strong> — 송출창·모든 교인 셀폰의 쌓인 자막을 한 번에 깨끗이 비움 (예배 순서가 바뀔 때 유용)</li>
+  <li><strong>언어 선택</strong> — 원본/번역(대표) 언어 변경. 송출 중에 바꿔도 다음 문장부터 바로 반영됩니다.</li>
   <li><strong>원고 업로드</strong> — PDF 또는 Word 파일로 번역 정확도 향상</li>
   <li><strong>용어집 업로드</strong> — 교회 고유명사를 추가해 음성인식 정확도 향상. 업로드 시 기존 용어집에 새 단어가 추가됩니다 (기존 단어 유지)</li>
+  <li><strong>번역 대응표</strong> — 특정 단어의 번역을 지정 (형식: <code>한글=English</code>, 예: <code>요한=John</code>). 이름·지명을 항상 원하는 대로 번역합니다.</li>
   <li><strong>화면 설정</strong> — 글자 크기·색상·배경색 조절 (빔프로젝터에 실시간 반영)</li>
-  <li><strong>QR코드</strong> — 교인 셀폰 접속용 주소</li>
+  <li><strong>QR코드 / 안내문 · 포스터 인쇄</strong> — 교인 접속용 QR. <strong>교인용 안내문(QR 포함)</strong>과 <strong>포스터 만들기</strong> 버튼으로 인쇄물 생성</li>
 </ul>
 
-<h3>빔프로젝터 화면 (<code>/</code>)</h3>
+<h3>빔프로젝터(송출) 화면 (<code>/</code>)</h3>
 <ul>
   <li>더블클릭 또는 F11 — 전체화면 전환</li>
   <li>자막은 아래에서 위로 쌓이며 화면이 넘치면 위에서부터 사라짐</li>
+  <li>운영자가 보는 대표 언어로 표시됩니다</li>
 </ul>
 
 <h3>교인 셀폰 화면 (<code>/mobile</code>)</h3>
 <ul>
   <li>QR코드 스캔으로 접속</li>
+  <li><strong>언어 선택</strong> — 화면 위쪽 언어 단추로 교인마다 <strong>각자 원하는 언어</strong>를 골라 볼 수 있습니다 (영어·중국어·일본어·스페인어·프랑스어·독일어·아랍어·한국어)</li>
+  <li>글자 크기 <strong>＋ / －</strong> 조절 버튼</li>
   <li>화면이 꺼지지 않도록 자동 잠금 방지 기능 포함</li>
+</ul>
+
+<h3>인쇄물 만들기</h3>
+<ul>
+  <li><strong>교인용 안내문</strong> (<code>/guide</code>) — QR + 언어 선택 + 사용법을 담은 한 장 안내문. 한국어/English 전환 가능, 인쇄·PDF 저장.</li>
+  <li><strong>포스터 만들기</strong> (<code>/poster</code>) — <strong>우리 교회 로고를 올리고</strong> 교회 이름·웹사이트를 입력하면 그 브랜딩으로 포스터가 완성됩니다. 로고·이름은 이 컴퓨터에 저장되어 다음에도 유지됩니다. QR·언어·제목은 자동으로 채워지며 Letter 가로 한 장으로 인쇄됩니다.</li>
 </ul>
 
 <!-- 7. FAQ -->
@@ -342,6 +360,22 @@
 빌립보서<br>
 에베소<br>
 고린도전서</p>
+
+<h3>Q. 교인마다 다른 언어로 볼 수 있나요?</h3>
+<p>네. 교인이 셀폰으로 QR을 찍어 접속한 뒤 화면 위쪽 <strong>언어 단추</strong>에서 원하는 언어를 고르면 됩니다.
+사람마다 각자 다른 언어(영어·중국어·일본어 등)로 동시에 볼 수 있습니다. 빔프로젝터 화면은 운영자가 고른 대표 언어로 나옵니다.</p>
+<p style="margin-top:6px;color:#888;font-size:12px">비용 참고: 실제로 <em>누군가 고른 언어만</em> 번역됩니다. 아무도 안 고른 언어는 번역하지 않아 추가 비용이 없습니다.</p>
+
+<h3>Q. 특정 이름·지명이 원하는 대로 번역되게 하려면?</h3>
+<p>대시보드 → <strong>번역 대응표</strong>에 <code>한글=English</code> 형식으로 한 줄에 하나씩 올리세요 (예: <code>요한=John</code>).
+해당 단어가 나오면 항상 지정한 번역으로 나옵니다.</p>
+
+<h3>Q. 화면에 자막이 지저분하게 쌓였어요</h3>
+<p>대시보드의 <strong>🧹 화면 지우기</strong> 버튼을 누르면 빔프로젝터와 모든 교인 셀폰의 자막이 한 번에 깨끗이 지워집니다.</p>
+
+<h3>Q. 우리 교회 로고로 안내 포스터를 만들고 싶어요</h3>
+<p>대시보드 QR 영역의 <strong>🖼 포스터 만들기</strong> 버튼 → 로고 이미지 업로드, 교회 이름·웹사이트 입력 → 인쇄/PDF 저장.
+한 번 올린 로고·이름은 그 컴퓨터에 저장되어 다음에도 그대로 쓰입니다.</p>
 
 <h3>Q. 셀폰에서 QR을 찍었는데 접속이 안 돼요</h3>
 <p>ngrok 설정이 완료되었는지 확인하세요. 대시보드의 QR코드 영역에 주소가 표시되어 있어야 합니다.</p>
