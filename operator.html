@@ -311,14 +311,20 @@
     <div class="card">
       <div class="card-title">번역 대응표 — 이름·단어 번역 지정</div>
       <div style="font-size:11px; color:#888; margin-bottom:8px;">
-        형식: 한글=English (한 줄에 하나씩) &nbsp;예) 요한=John
+        한글 단어와 원하는 번역을 입력하고 <strong>추가</strong>를 누르세요 &nbsp;예) 요한 → John
       </div>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input type="text" id="map-ko" placeholder="한글 (예: 요한)" style="flex:1; min-width:0; background:var(--card-2); color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; outline:none;">
+        <span style="color:var(--accent);">→</span>
+        <input type="text" id="map-en" placeholder="번역 (예: John)" style="flex:1; min-width:0; background:var(--card-2); color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; outline:none;">
+        <button class="btn btn-start" onclick="addMapping()" style="flex-shrink:0;">추가</button>
+      </div>
+      <span id="mapping-status" style="display:inline-block; margin-top:8px; font-size:12px; color:#666;">불러오는 중...</span>
+      <div id="mapping-list" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+      <div style="margin-top:10px;">
         <input type="file" id="mapping-file" style="display:none" onchange="uploadMapping()">
-        <button class="btn btn-gray" onclick="document.getElementById('mapping-file').click()">📄 대응표 올리기</button>
-        <span id="mapping-status" style="font-size:12px; color:#666;">불러오는 중...</span>
+        <button class="btn btn-gray" onclick="document.getElementById('mapping-file').click()" style="font-size:11px; padding:5px 10px;">📄 파일로 한번에 올리기</button>
       </div>
-      <div id="mapping-preview" style="margin-top:8px; font-size:11px; color:#555; line-height:1.5;"></div>
     </div>
 
     <!-- 실시간 미리보기 -->
@@ -695,21 +701,68 @@
   loadGlossaryInfo();
 
   // 번역 대응표
+  function renderMapping(data) {
+    const st = document.getElementById("mapping-status");
+    if (data.count > 0) {
+      st.textContent = "✓ 대응어 " + data.count + "개 등록됨";
+      st.style.color = "#4caf50";
+    } else {
+      st.textContent = "아직 등록된 단어가 없습니다";
+      st.style.color = "#666";
+    }
+    const box = document.getElementById("mapping-list");
+    box.innerHTML = "";
+    (data.items || []).forEach(function (it) {
+      const chip = document.createElement("span");
+      chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; background:var(--card-2); border:1px solid var(--border-strong); border-radius:16px; padding:4px 6px 4px 11px; font-size:12px; color:var(--text);";
+      chip.textContent = it.k + " → " + it.v;
+      const x = document.createElement("button");
+      x.textContent = "✕";
+      x.title = "삭제";
+      x.style.cssText = "border:none; background:transparent; color:#ff7a7a; cursor:pointer; font-size:12px; padding:0 2px;";
+      x.onclick = function () { removeMapping(it.k); };
+      chip.appendChild(x);
+      box.appendChild(chip);
+    });
+  }
+
   async function loadMappingInfo() {
+    try { renderMapping(await (await fetch("/mapping-info")).json()); } catch (e) {}
+  }
+
+  async function addMapping() {
+    const ko = document.getElementById("map-ko");
+    const en = document.getElementById("map-en");
+    const k = ko.value.trim(), v = en.value.trim();
+    if (!k || !v) { ko.focus(); return; }
     try {
-      const res = await fetch("/mapping-info");
+      const res = await fetch("/add-mapping", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ korean: k, english: v })
+      });
       const data = await res.json();
-      const st = document.getElementById("mapping-status");
-      if (data.count > 0) {
-        st.textContent = "✓ 대응어 " + data.count + "개 등록됨";
-        st.style.color = "#4caf50";
-        document.getElementById("mapping-preview").textContent = data.preview ? ("예: " + data.preview + " …") : "";
-      } else {
-        st.textContent = "등록된 대응표 없음";
-        st.style.color = "#666";
-      }
+      if (data.error) { alert(data.error); return; }
+      renderMapping(data);
+      ko.value = ""; en.value = ""; ko.focus();
+    } catch (e) { alert("추가 실패"); }
+  }
+
+  async function removeMapping(k) {
+    try {
+      const res = await fetch("/remove-mapping", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ korean: k })
+      });
+      renderMapping(await res.json());
     } catch (e) {}
   }
+
+  // 엔터로 추가
+  ["map-ko", "map-en"].forEach(function (id) {
+    document.getElementById(id).addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); addMapping(); }
+    });
+  });
 
   async function uploadMapping() {
     const file = document.getElementById("mapping-file").files[0];
@@ -721,12 +774,9 @@
       const res = await fetch("/upload-mapping", { method: "POST", body: fd });
       const data = await res.json();
       if (data.error) { st.textContent = "오류: " + data.error; st.style.color = "#f44336"; }
-      else {
-        st.textContent = "✓ 대응어 " + data.count + "개 등록됨 (+" + data.added + "개 추가)";
-        st.style.color = "#4caf50";
-        document.getElementById("mapping-preview").textContent = data.preview ? ("예: " + data.preview + " …") : "";
-      }
+      else renderMapping(data);
     } catch (e) { st.textContent = "업로드 실패"; st.style.color = "#f44336"; }
+    document.getElementById("mapping-file").value = "";
   }
 
   loadMappingInfo();

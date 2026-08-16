@@ -820,6 +820,19 @@ def glossary_info():
                     "preview": ", ".join(glossary_terms[:15])})
 
 
+def _save_mapping():
+    path = os.path.join(APP_DIR, "mapping.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        for k, v in translation_mapping.items():
+            f.write(f"{k}={v}\n")
+
+
+def _mapping_payload():
+    items = [{"k": k, "v": v} for k, v in translation_mapping.items()]
+    preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
+    return {"status": "ok", "count": len(items), "preview": preview, "items": items}
+
+
 @app.route("/upload-mapping", methods=["POST"])
 def upload_mapping():
     """번역 대응표 업로드 — 한글=English 형식, 기존 항목에 병합."""
@@ -829,31 +842,48 @@ def upload_mapping():
         return jsonify({"error": "파일이 없습니다."}), 400
     try:
         text = _extract_text(file)
-        new_count = 0
         for line in text.splitlines():
             line = line.strip()
             if "=" in line and line:
                 k, v = line.split("=", 1)
                 k, v = k.strip(), v.strip()
                 if k and v:
-                    if k not in translation_mapping:
-                        new_count += 1
                     translation_mapping[k] = v
-        path = os.path.join(APP_DIR, "mapping.txt")
-        with open(path, "w", encoding="utf-8") as f:
-            for k, v in translation_mapping.items():
-                f.write(f"{k}={v}\n")
-        preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
-        return jsonify({"status": "ok", "count": len(translation_mapping),
-                        "added": new_count, "preview": preview})
+        _save_mapping()
+        return jsonify(_mapping_payload())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/add-mapping", methods=["POST"])
+def add_mapping():
+    """단어를 직접 입력해 대응표에 추가/수정."""
+    global translation_mapping
+    data = request.get_json(force=True)
+    k = (data.get("korean") or "").strip()
+    v = (data.get("english") or "").strip()
+    if not k or not v:
+        return jsonify({"error": "단어와 번역을 모두 입력하세요."}), 400
+    translation_mapping[k] = v
+    _save_mapping()
+    return jsonify(_mapping_payload())
+
+
+@app.route("/remove-mapping", methods=["POST"])
+def remove_mapping():
+    """대응표에서 항목 삭제."""
+    global translation_mapping
+    data = request.get_json(force=True)
+    k = (data.get("korean") or "").strip()
+    if k in translation_mapping:
+        del translation_mapping[k]
+        _save_mapping()
+    return jsonify(_mapping_payload())
+
+
 @app.route("/mapping-info")
 def mapping_info():
-    preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
-    return jsonify({"count": len(translation_mapping), "preview": preview})
+    return jsonify(_mapping_payload())
 
 
 @app.route("/settings", methods=["GET", "POST"])
