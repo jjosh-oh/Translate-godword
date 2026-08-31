@@ -218,6 +218,12 @@ class LangHub:
         with self._lock:
             return {lang for lang, subs in self._lang_subs.items() if subs}
 
+    def phone_stats(self):
+        """셀폰(언어 지정 접속) 수 집계. 송출창(대표 구독)은 제외."""
+        with self._lock:
+            by_lang = {lang: len(subs) for lang, subs in self._lang_subs.items() if subs}
+        return {"total": sum(by_lang.values()), "by_lang": by_lang}
+
 
 hub = LangHub()
 
@@ -884,6 +890,12 @@ def remove_mapping():
 @app.route("/mapping-info")
 def mapping_info():
     return jsonify(_mapping_payload())
+
+
+@app.route("/viewer-count")
+def viewer_count():
+    """폰으로 통역을 보고 있는 접속자 수(언어별 포함)."""
+    return jsonify(hub.phone_stats())
 
 
 @app.route("/settings", methods=["GET", "POST"])

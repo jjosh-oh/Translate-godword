@@ -392,9 +392,13 @@
       <input type="hidden" id="tunnel-url">
       <div style="display:flex; gap:12px; align-items:center;">
         <img id="qr-img" style="width:88px; height:88px; background:#fff; border-radius:6px; padding:4px; flex-shrink:0;">
-        <div>
+        <div style="min-width:0;">
           <div id="qr-link" style="font-size:11px; color:#7fe3d6; word-break:break-all;"></div>
           <div style="font-size:11px; color:#666; margin-top:4px;">교인들이 이 QR을 스캔하면 셀폰에서 자막을 봅니다</div>
+          <div id="viewer-count" style="margin-top:8px; font-size:14px; font-weight:600; color:var(--accent);">
+            <span id="viewer-dot" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#5a6472; margin-right:6px; vertical-align:middle;"></span>📱 접속자 0명
+          </div>
+          <div id="viewer-breakdown" style="font-size:11px; color:#8b95a3; margin-top:2px;"></div>
         </div>
       </div>
       <div id="qr-area" style="display:none;"></div>
@@ -843,6 +847,25 @@
 
   // 페이지 로드 시 자동으로 주소 불러오기 시도
   setTimeout(loadTunnelUrl, 1000);
+
+  // ── 폰 접속자 수 실시간 표시 ──
+  const VIEWER_LANG_KR = { English:"영어", Korean:"한국어", Japanese:"일본어", Chinese:"중국어",
+                           Spanish:"스페인어", French:"프랑스어", German:"독일어", Arabic:"아랍어" };
+  async function updateViewerCount() {
+    try {
+      const d = await (await fetch("/viewer-count")).json();
+      const total = d.total || 0;
+      document.getElementById("viewer-count").innerHTML =
+        '<span id="viewer-dot" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:'
+        + (total > 0 ? '#16baa9' : '#5a6472') + '; margin-right:6px; vertical-align:middle;"></span>📱 접속자 '
+        + total + '명';
+      const langs = Object.entries(d.by_lang || {}).sort((a,b) => b[1]-a[1]);
+      document.getElementById("viewer-breakdown").textContent =
+        langs.length ? langs.map(([k,v]) => (VIEWER_LANG_KR[k]||k) + " " + v).join(" · ") : "";
+    } catch (e) {}
+  }
+  updateViewerCount();
+  setInterval(updateViewerCount, 4000);
 
   function fullscreenDisplay() {
     if (displayWindow && !displayWindow.closed) {
