@@ -128,6 +128,7 @@
         <option value="Arabic">العربية</option>
       </select>
       <span id="size-controls">
+        <button id="voice-btn" onclick="toggleVoice()" style="width:auto; padding:0 10px;">🔇</button>
         <button onclick="changeSize(-0.5)">－</button>
         <button onclick="changeSize(0.5)">＋</button>
       </span>
@@ -248,8 +249,41 @@
       } else if (msg.type === "chunk") {
         currentText += msg.data.replace(/\\n/g, "\n");
         render(currentText);
+      } else if (msg.type === "audio") {
+        enqueueAudio(msg.data);
       }
     };
+  }
+
+  // ── 번역 음성 재생 (이어폰용, 버튼으로 켜고 끔) ──
+  let voiceOn = false;
+  const audioQueue = [];
+  let playing = false;
+
+  function toggleVoice() {
+    voiceOn = !voiceOn;
+    document.getElementById("voice-btn").textContent = voiceOn ? "🔊" : "🔇";
+    if (!voiceOn) { audioQueue.length = 0; }
+    else {
+      // iOS 자동재생 정책: 사용자 제스처 시점에 오디오 잠금 해제
+      try { const a = new Audio(); a.play().catch(() => {}); } catch (e) {}
+    }
+  }
+
+  function enqueueAudio(b64) {
+    if (!voiceOn) return;             // 꺼져 있으면 무시
+    audioQueue.push(b64);
+    if (!playing) playNext();
+  }
+
+  function playNext() {
+    const b64 = audioQueue.shift();
+    if (!b64) { playing = false; return; }
+    playing = true;
+    const a = new Audio("data:audio/mp3;base64," + b64);
+    a.onended = playNext;
+    a.onerror = playNext;
+    a.play().catch(() => { playing = false; });
   }
 
   // 언어 변경: 자막을 비우고 새 언어로 재연결

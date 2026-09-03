@@ -235,6 +235,14 @@ settings = {
     "delay": 0,
     "target_lang": "English",
     "source_lang": "Korean",
+    "voice": False,   # 번역 음성(TTS) 사용 여부 (운영자 토글, 기본 꺼짐)
+}
+
+# 번역 언어 이름 → Google TTS 언어 코드
+TTS_LANG = {
+    "English": "en-US", "Korean": "ko-KR", "Japanese": "ja-JP",
+    "Chinese": "cmn-CN", "Spanish": "es-ES", "French": "fr-FR",
+    "German": "de-DE", "Arabic": "ar-XA",
 }
 
 last_input = ""
@@ -355,6 +363,42 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
         last_output = out
         _log_translation(text, out)
         operator_queue.put(("done", ""))
+
+    # 번역 음성(TTS): 운영자가 켰을 때만, 해당 언어 셀폰(이어폰)으로 방송.
+    # (1단계: 대표 언어만 — is_primary. 이후 보조 언어로 확장)
+    if is_primary and settings.get("voice") and out.strip():
+        threading.Thread(target=_tts_and_broadcast, args=(out, target_lang), daemon=True).start()
+
+
+# ===== 번역 음성(Google Cloud TTS) =====
+_tts_client = None
+
+
+def _get_tts_client():
+    global _tts_client
+    if _tts_client is None:
+        from google.cloud import texttospeech
+        _tts_client = texttospeech.TextToSpeechClient()
+    return _tts_client
+
+
+def _tts_and_broadcast(text, target_lang):
+    """번역문을 Google TTS로 합성해 해당 언어 셀폰에 오디오로 방송."""
+    import base64
+    try:
+        from google.cloud import texttospeech
+        code = TTS_LANG.get(target_lang, "en-US")
+        resp = _get_tts_client().synthesize_speech(
+            input=texttospeech.SynthesisInput(text=text),
+            voice=texttospeech.VoiceSelectionParams(language_code=code),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3),
+        )
+        b64 = base64.b64encode(resp.audio_content).decode()
+        # is_primary=False → 송출창(대표 구독)엔 안 가고 해당 언어 셀폰에만 전달
+        hub.publish(target_lang, ("__audio__", b64), is_primary=False)
+    except Exception as e:
+        print("TTS 오류:", str(e)[:200])
 
 
 # ===== 번역 작업 큐 (문장 단위 번역을 순서대로 처리) =====
@@ -940,6 +984,8 @@ def ws_display(ws):
                 continue
             if isinstance(item, tuple) and item[0] == "__settings__":
                 msg = {"type": "settings", "data": item[1]}
+            elif isinstance(item, tuple) and item[0] == "__audio__":
+                msg = {"type": "audio", "data": item[1]}
             elif item == "__reset__":
                 msg = {"type": "reset"}
             elif item == "__clear__":
@@ -970,6 +1016,8 @@ def stream():
                     continue
                 if isinstance(item, tuple) and item[0] == "__settings__":
                     yield f"data: __settings__{json.dumps(item[1])}\n\n"
+                elif isinstance(item, tuple) and item[0] == "__audio__":
+                    continue  # 송출창(SSE)에는 음성 전송 안 함 — 셀폰 전용
                 elif item == "__reset__":
                     yield "data: __reset__\n\n"
                 elif item == "__clear__":

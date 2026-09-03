@@ -384,6 +384,10 @@
         <button class="btn btn-gray" id="clear-display-btn" onclick="clearDisplay()">🧹 화면 지우기</button>
         <button class="btn btn-stop" id="stop-btn" onclick="stopBroadcast()" disabled>■ 송출 종료</button>
       </div>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px; color:var(--text-2); cursor:pointer;">
+        <input type="checkbox" id="voice-toggle" onchange="toggleVoiceFeature()" style="width:auto; cursor:pointer;">
+        🔊 번역 음성 켜기 <span style="color:var(--text-3);">— 교인이 이어폰으로 번역을 들을 수 있음 (사용량 만큼 추가 비용)</span>
+      </label>
     </div>
 
     <!-- 셀폰 접속 -->
@@ -603,6 +607,16 @@
     document.getElementById("delay").value = s.delay;
     document.getElementById("delay-val").textContent = s.delay + "s";
     document.getElementById("target-lang-display").value = s.target_lang;
+    if ("voice" in s) document.getElementById("voice-toggle").checked = !!s.voice;
+  }
+
+  function toggleVoiceFeature() {
+    const on = document.getElementById("voice-toggle").checked;
+    fetch("/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voice: on })
+    });
   }
 
   function updateFontSize(val) {
