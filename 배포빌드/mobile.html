@@ -13,7 +13,7 @@
     :root {
       --text-color: #ffffff;
       --bg-color: #000000;
-      --base-size: 6.5vw;
+      --base-size: 6.5vmin;
       --accent: #16baa9;
     }
 
@@ -103,7 +103,7 @@
     #empty {
       margin: auto;
       color: #555;
-      font-size: 4.5vw;
+      font-size: 4.5vmin;
       font-weight: 400;
       text-align: center;
       padding: 0 30px;
@@ -151,7 +151,7 @@
 
   function changeSize(delta) {
     baseSize = Math.max(3.5, Math.min(11, baseSize + delta));
-    document.documentElement.style.setProperty("--base-size", baseSize + "vw");
+    document.documentElement.style.setProperty("--base-size", baseSize + "vmin");
     render(currentText);
   }
 
