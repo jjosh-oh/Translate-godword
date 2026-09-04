@@ -603,12 +603,15 @@ def audio_socket(ws):
     target_lang = cfg.get("target_lang", "English")
 
     # 인식 힌트(speech adaptation)
+    # 용어집·설교 원고는 모두 '한국어' 단어 목록이다. 원어가 스페인어 등 다른
+    # 언어일 때 이걸 힌트로 주면 인식 정확도와 자동 문장부호가 오히려 나빠진다.
+    ko_source = src_code.startswith("ko")
     speech_contexts = []
     # 1) 교회 용어집 — 모든 항목을 높은 가중치로(고유명사 사전)
-    if glossary_terms:
+    if glossary_terms and ko_source:
         speech_contexts.append(speech.SpeechContext(phrases=glossary_terms[:4000], boost=20.0))
     # 2) 오늘 설교 원고에서 자주 나오는 단어 — 보조 힌트
-    if sermon_context:
+    if sermon_context and ko_source:
         import re as _re2
         from collections import Counter
         words = _re2.findall(r"[가-힣]{2,}", sermon_context)
@@ -667,13 +670,36 @@ def audio_socket(ws):
     reset_context()   # 새 마이크 세션: 이전 발화 문맥 초기화
 
     import re as _re
+    import time as _time
 
     def split_sentences(t):
         # 문장부호(. ? ! 。 ？ ！ …) 뒤에서 자른다. 부호를 포함해 반환.
         parts = _re.split(r'(?<=[\.\?\!。？！…])\s*', t)
         return [p for p in parts if p.strip()]
 
+    # ── 자막 멈춤 방지 ────────────────────────────────────────────────
+    # 한국어 인식은 말하는 중에도 마침표를 잘 찍어주지만, 스페인어 등 일부
+    # 언어는 마침표 없이 1분 넘게 이어붙인다. 그러면 아래 '완성된 문장' 조건이
+    # 계속 거짓이라 발화가 끝날 때까지 송출 화면이 멈춘 것처럼 보인다.
+    # → 마지막 전송 후 FORCE_SEC 이상 지나고 FORCE_MIN_CHARS 이상 쌓이면
+    #   쉼표·띄어쓰기 경계에서 끊어 먼저 번역해 내보낸다.
+    FORCE_SEC = 7.0        # 이 시간 넘게 자막이 안 나가면
+    FORCE_MIN_CHARS = 30   # 그리고 이만큼 쌓였으면 강제로 끊는다
+
+    def force_cut(t):
+        # 쉼표류가 뒤쪽 절반에 있으면 거기서, 없으면 마지막 띄어쓰기에서 끊는다.
+        for mark in (",", ";", ":", "、", "，", "…"):
+            i = t.rfind(mark)
+            if i >= len(t) * 0.4:
+                return t[:i + 1]
+        i = t.rfind(" ")
+        if i >= len(t) * 0.5:
+            return t[:i]
+        return t   # 끊을 자리가 없으면 통째로
+
     translated = []  # 현재 발화에서 이미 번역에 보낸 문장(텍스트로 중복 제거)
+    sent_len = 0     # 이번 발화에서 강제로 끊어 보낸 앞부분의 길이(글자 수)
+    last_sent_at = _time.time()
 
     # 5분 제한 대응: 스트림이 끝나면 다시 연결 (음성 큐는 유지)
     while not stop_flag["stop"]:
@@ -684,7 +710,9 @@ def audio_socket(ws):
                     transcript = result.alternatives[0].transcript
                     if not transcript.strip():
                         continue
-                    pieces = split_sentences(transcript)
+                    # 강제로 끊어 이미 보낸 앞부분은 빼고 본다
+                    rest = transcript[sent_len:] if len(transcript) > sent_len else ""
+                    pieces = split_sentences(rest)
 
                     if result.is_final:
                         operator_queue.put(("input", transcript.strip()))
@@ -694,6 +722,8 @@ def audio_socket(ws):
                             if n and n not in translated:
                                 enqueue_translation(n, source_name, my_session)
                         translated = []  # 다음 발화 위해 초기화
+                        sent_len = 0
+                        last_sent_at = _time.time()
                     else:
                         operator_queue.put(("interim", transcript.strip()))
                         # 마침표로 '완성된' 문장만 즉시 번역 (마지막 미완성 조각 제외)
@@ -704,6 +734,15 @@ def audio_socket(ws):
                                 if n and n not in translated:
                                     translated.append(n)
                                     enqueue_translation(n, source_name, my_session)
+                                    last_sent_at = _time.time()
+                        # 마침표가 안 붙은 채 너무 오래 쌓이면 강제로 끊어 보낸다
+                        elif (_time.time() - last_sent_at >= FORCE_SEC
+                              and len(rest.strip()) >= FORCE_MIN_CHARS):
+                            chunk = force_cut(rest)
+                            if chunk.strip():
+                                enqueue_translation(chunk.strip(), source_name, my_session)
+                                sent_len += len(chunk)
+                                last_sent_at = _time.time()
         except Exception as e:
             operator_queue.put(("stt_error", str(e)[:120]))
             if stop_flag["stop"]:
