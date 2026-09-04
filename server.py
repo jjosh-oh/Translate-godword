@@ -214,7 +214,7 @@ def _log_translation(src, out):
         pass
 
 
-def translate_and_stream(text: str, target_lang: str, source_lang: str, is_primary: bool = True):
+def translate_and_stream(text: str, target_lang: str, source_lang: str, is_primary: bool = True, context: str = ""):
     global last_output
     base_instruction = (
         f"You are a professional church interpreter providing live subtitles. "
@@ -234,6 +234,14 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
             + pairs
         )
 
+    # 바로 앞 문장들(문맥) — 번역하지 말고 흐름/대명사/용어를 자연스럽게 잇는 용도
+    context_block = ""
+    if context:
+        context_block = (
+            f"\n\nPreceding {source_lang} text (context ONLY — do NOT translate, repeat, or output it; "
+            f"use it only so pronouns, referents, terms, and sentence flow stay natural):\n{context}"
+        )
+
     if sermon_context:
         # 설교 원고: 고유명사 확인 '참고용'으로만 — 내용을 이어 쓰지 않도록 명시
         reference = (
@@ -244,12 +252,12 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
             "--- SERMON REFERENCE (do not output) ---\n" + sermon_context[:8000] + "\n--- END ---"
         )
         system = [
-            {"type": "text", "text": base_instruction + mapping_text},
+            {"type": "text", "text": base_instruction + mapping_text + context_block},
             {"type": "text", "text": reference,
              "cache_control": {"type": "ephemeral"}},
         ]
     else:
-        system = base_instruction + mapping_text
+        system = base_instruction + mapping_text + context_block
 
     hub.publish(target_lang, "__clear__", is_primary)
     if is_primary:
@@ -327,14 +335,14 @@ _session_lock = threading.Lock()
 
 
 def _run_job(job, is_primary):
-    text, target_lang, source_lang, session = job
+    text, target_lang, source_lang, session, context = job
     # 세션이 유효한 경우에만 번역 (None이면 수동 입력 → 항상 실행)
     if session is not None:
         with _session_lock:
             if session != _current_session:
                 return  # 마이크가 꺼진 뒤의 오래된 작업 → 폐기
     try:
-        translate_and_stream(text, target_lang, source_lang, is_primary)
+        translate_and_stream(text, target_lang, source_lang, is_primary, context)
     except Exception as e:
         print("번역 오류:", e)
 
@@ -368,14 +376,29 @@ def _tts_worker():
 threading.Thread(target=_tts_worker, daemon=True).start()
 
 
+# 최근 원문 문장(문맥용) — 조각 번역이 앞뒤 흐름을 참고하도록 함
+from collections import deque as _deque
+_recent_src = _deque(maxlen=3)
+_recent_lock = threading.Lock()
+
+
+def reset_context():
+    with _recent_lock:
+        _recent_src.clear()
+
+
 def enqueue_translation(text, source_lang, session=None):
     """대표 언어 + 현재 셀폰이 구독한 언어들로 번역을 예약.
     아무도 안 고른 언어는 큐에 들어가지 않으므로 비용이 발생하지 않는다."""
     primary = settings["target_lang"]
-    primary_jobs.put((text, primary, source_lang, session))
+    # 이번 문장 '이전'까지의 문맥을 계산한 뒤, 현재 문장을 기록
+    with _recent_lock:
+        context = " ".join(_recent_src)
+        _recent_src.append(text)
+    primary_jobs.put((text, primary, source_lang, session, context))
     for lang in hub.active_languages():
         if lang != primary:
-            secondary_jobs.put((text, lang, source_lang, session))
+            secondary_jobs.put((text, lang, source_lang, session, context))
 
 
 @app.route("/")
@@ -637,6 +660,7 @@ def audio_socket(ws):
     with _session_lock:
         _current_session += 1
         my_session = _current_session
+    reset_context()   # 새 마이크 세션: 이전 발화 문맥 초기화
 
     import re as _re
 
@@ -883,6 +907,7 @@ def clear_display():
     global last_input, last_output
     hub.broadcast("__reset__")
     operator_queue.put(("reset", ""))
+    reset_context()                       # 문맥 초기화
     last_input = ""
     last_output = ""
     return jsonify(ok=True)
