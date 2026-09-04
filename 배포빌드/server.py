@@ -378,9 +378,10 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
         _log_translation(text, out)
         operator_queue.put(("done", ""))
 
-    # 번역 음성(TTS): 운영자가 켰을 때만, 해당 언어 셀폰(이어폰)으로 방송.
-    # (1단계: 대표 언어만 — is_primary. 이후 보조 언어로 확장)
-    if is_primary and settings.get("voice") and out.strip():
+    # 번역 음성(TTS): 운영자가 켰을 때만, 각 언어 셀폰(이어폰)으로 방송.
+    # (2단계: 대표 언어 + 셀폰이 고른 보조 언어 모두 — 각자 자기 언어로 들음.
+    #  구독자가 없는 언어는 번역 자체가 안 돌므로 음성 비용도 발생하지 않음.)
+    if settings.get("voice") and out.strip():
         threading.Thread(target=_tts_and_broadcast, args=(out, target_lang), daemon=True).start()
 
 
