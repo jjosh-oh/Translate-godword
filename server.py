@@ -20,6 +20,21 @@ if os.path.exists(_key_path) and "GOOGLE_APPLICATION_CREDENTIALS" not in os.envi
 
 app = Flask(__name__)
 sock = Sock(app)
+
+
+@app.after_request
+def _no_cache_html(resp):
+    """HTML 페이지는 항상 최신본을 받도록 캐시 금지.
+    (업데이트 후 폰에 옛 화면이 남아 자막/언어가 잘못 보이는 문제 방지)
+    WebSocket/SSE/JSON 응답은 건드리지 않는다."""
+    ctype = resp.headers.get("Content-Type", "")
+    if ctype.startswith("text/html"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
+
+
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 # Gemini 클라이언트(비교용) — Vertex AI 경유, 실패해도 서버는 정상 동작

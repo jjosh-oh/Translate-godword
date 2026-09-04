@@ -48,6 +48,20 @@ if os.path.exists(_key_path) and "GOOGLE_APPLICATION_CREDENTIALS" not in os.envi
 app = Flask(__name__)
 sock = Sock(app)
 
+
+@app.after_request
+def _no_cache_html(resp):
+    """HTML 페이지는 항상 최신본을 받도록 캐시 금지.
+    (업데이트 후 폰에 옛 화면이 남아 자막/언어가 잘못 보이는 문제 방지)
+    WebSocket/SSE/JSON 응답은 건드리지 않는다."""
+    ctype = resp.headers.get("Content-Type", "")
+    if ctype.startswith("text/html"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
+
+
 # ── ngrok 자동 시작 ─────────────────────────────────────────────────────────
 _ngrok_url = ""  # 실제 연결된 공개 URL (터널이 뜨면 채워짐)
 
