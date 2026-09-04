@@ -282,7 +282,7 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
     # (2단계: 대표 언어 + 셀폰이 고른 보조 언어 모두 — 각자 자기 언어로 들음.
     #  구독자가 없는 언어는 번역 자체가 안 돌므로 음성 비용도 발생하지 않음.)
     if settings.get("voice") and out.strip():
-        threading.Thread(target=_tts_and_broadcast, args=(out, target_lang), daemon=True).start()
+        tts_jobs.put((out, target_lang))
 
 
 # ===== 번역 음성(Google Cloud TTS) =====
@@ -351,6 +351,21 @@ def _secondary_worker():
 
 threading.Thread(target=_primary_worker, daemon=True).start()
 threading.Thread(target=_secondary_worker, daemon=True).start()
+
+
+# ── 번역 음성(TTS) 작업 큐 ──
+# 문장을 순서대로(직렬) 합성해야 소리 순서가 자막과 일치한다.
+# 동시 스레드로 합성하면 문장별 합성 시간 차로 소리 순서가 뒤바뀐다.
+tts_jobs = queue.Queue()
+
+
+def _tts_worker():
+    while True:
+        text, target_lang = tts_jobs.get()
+        _tts_and_broadcast(text, target_lang)
+
+
+threading.Thread(target=_tts_worker, daemon=True).start()
 
 
 def enqueue_translation(text, source_lang, session=None):

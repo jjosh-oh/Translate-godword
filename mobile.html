@@ -239,6 +239,7 @@
       } else if (msg.type === "reset") {
         lines = [];
         currentText = "";
+        stopPlayback();     // 화면 지우기: 대기 중인 음성도 정지
         subtitles.innerHTML = '<div id="empty">통역이 시작되면<br>이곳에 자막이 표시됩니다.</div>';
       } else if (msg.type === "clear") {
         if (currentText.trim()) lines.push(currentText.trim());
@@ -262,6 +263,8 @@
   let audioCtx = null;
   const audioQueue = [];   // base64 문자열 대기열
   let playing = false;
+  let currentSource = null;   // 현재 재생 중인 오디오 (끄기용)
+  const MAX_QUEUE = 4;        // 실시간 유지: 밀리면 오래된 것부터 버려 자막과 맞춤
 
   function ensureAudioCtx() {
     if (!audioCtx) {
@@ -274,10 +277,19 @@
     return audioCtx;
   }
 
+  function stopPlayback() {
+    audioQueue.length = 0;
+    if (currentSource) {
+      try { currentSource.onended = null; currentSource.stop(0); } catch (e) {}
+      currentSource = null;
+    }
+    playing = false;
+  }
+
   function toggleVoice() {
     voiceOn = !voiceOn;
     document.getElementById("voice-btn").textContent = voiceOn ? "🔊" : "🔇";
-    if (!voiceOn) { audioQueue.length = 0; return; }
+    if (!voiceOn) { stopPlayback(); return; }   // 끄면 즉시 정지
     // 사용자 제스처 시점: 오디오 잠금 해제 (무음 버퍼 1회 재생)
     const ctx = ensureAudioCtx();
     if (ctx) {
@@ -299,12 +311,14 @@
   function enqueueAudio(b64) {
     if (!voiceOn) return;             // 꺼져 있으면 무시
     audioQueue.push(b64);
+    // 소리가 자막보다 밀리면 오래된 것부터 버려 실시간에 가깝게 유지
+    while (audioQueue.length > MAX_QUEUE) audioQueue.shift();
     if (!playing) playNext();
   }
 
   function playNext() {
     const b64 = audioQueue.shift();
-    if (!b64) { playing = false; return; }
+    if (!b64) { playing = false; currentSource = null; return; }
     playing = true;
     const ctx = ensureAudioCtx();
     if (!ctx) { playing = false; return; }
@@ -314,11 +328,13 @@
     ctx.decodeAudioData(
       arr,
       (audioBuf) => {
+        if (!voiceOn) { playing = false; currentSource = null; return; }  // 그새 꺼졌으면 중단
         try {
           const src = ctx.createBufferSource();
           src.buffer = audioBuf;
           src.connect(ctx.destination);
-          src.onended = playNext;
+          currentSource = src;
+          src.onended = () => { currentSource = null; playNext(); };
           src.start(0);
         } catch (e) { playNext(); }
       },
