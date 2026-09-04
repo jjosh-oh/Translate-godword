@@ -48,8 +48,8 @@ Source: "ngrok.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntex
 Source: "manual.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "manual-en.html"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
-; 기본 용어집 (없으면 서버가 내장 파일 사용)
-Source: "glossary.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; 기본 용어집 — 처음 설치 때만 넣고, 이미 있으면(사용자가 편집한 것) 덮어쓰지 않음
+Source: "glossary.txt"; DestDir: "{app}"; Flags: onlyifdoesntexist skipifsourcedoesntexist
 
 [Icons]
 ; 바탕화면 바로가기
