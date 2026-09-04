@@ -18,6 +18,10 @@ _key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "google-key
 if os.path.exists(_key_path) and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _key_path
 
+# 이 프로그램의 버전 — 새 버전 알림 비교 기준 (배포 시 함께 올림)
+APP_VERSION = "1.1"
+UPDATE_API = "https://api.github.com/repos/jjosh-oh/Translate-godword/releases/latest"
+
 app = Flask(__name__)
 sock = Sock(app)
 
@@ -889,6 +893,33 @@ def mapping_info():
 def viewer_count():
     """폰으로 통역을 보고 있는 접속자 수(언어별 포함)."""
     return jsonify(hub.phone_stats())
+
+
+def _vtuple(v):
+    """'1.10' 같은 버전을 숫자로 비교 가능한 형태로."""
+    try:
+        return tuple(int(x) for x in str(v).strip().lstrip("vV").split("."))
+    except Exception:
+        return (0,)
+
+
+@app.route("/check-update")
+def check_update():
+    """GitHub 최신 릴리스와 현재 버전을 비교해 새 버전이 있으면 알려준다.
+    네트워크가 안 되거나 릴리스가 없으면 조용히 '최신'으로 응답(방해 금지)."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(UPDATE_API, headers={"User-Agent": "LiveWord"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        latest = str(data.get("tag_name", "")).lstrip("vV")
+        if latest and _vtuple(latest) > _vtuple(APP_VERSION):
+            return jsonify(update=True, current=APP_VERSION, latest=latest,
+                           url=data.get("html_url", ""),
+                           notes=(data.get("body") or "")[:300])
+    except Exception:
+        pass
+    return jsonify(update=False, current=APP_VERSION)
 
 
 @app.route("/settings", methods=["GET", "POST"])

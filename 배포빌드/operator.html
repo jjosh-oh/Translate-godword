@@ -265,6 +265,19 @@
   <span class="hint">출력 화면 / OBS 브라우저 소스 주소: <strong>http://localhost:5000</strong></span>
 </header>
 
+<!-- 새 버전 알림 (있을 때만 표시) -->
+<div id="update-banner" style="display:none; margin:0 24px 14px; padding:12px 16px;
+     background:rgba(22,186,169,0.12); border:1px solid rgba(22,186,169,0.45);
+     border-radius:10px; font-size:14px;">
+  <strong>🎉 새 버전이 있습니다</strong>
+  <span id="update-text" style="margin-left:8px;"></span>
+  <a id="update-link" href="#" target="_blank" rel="noopener"
+     style="margin-left:10px; color:var(--accent); font-weight:600;">다운로드 →</a>
+  <button onclick="document.getElementById('update-banner').style.display='none'"
+     style="float:right; background:none; border:none; color:var(--text-3);
+            cursor:pointer; font-size:16px;">✕</button>
+</div>
+
 <main>
 
   <!-- 왼쪽 열 -->
@@ -880,6 +893,20 @@
   }
   updateViewerCount();
   setInterval(updateViewerCount, 4000);
+
+  // 새 버전 확인 — 시작할 때 한 번만, 실패하면 조용히 무시
+  (async () => {
+    try {
+      const r = await fetch("/check-update");
+      const d = await r.json();
+      if (d.update) {
+        document.getElementById("update-text").textContent =
+          `현재 ${d.current} → 최신 ${d.latest}`;
+        document.getElementById("update-link").href = d.url;
+        document.getElementById("update-banner").style.display = "block";
+      }
+    } catch (e) {}
+  })();
 
   function fullscreenDisplay() {
     if (displayWindow && !displayWindow.closed) {
