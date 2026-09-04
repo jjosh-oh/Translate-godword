@@ -255,19 +255,45 @@
     };
   }
 
-  // ── 번역 음성 재생 (이어폰용, 버튼으로 켜고 끔) ──
+  // ── 번역 음성 재생 (Web Audio) ──
+  // 일반 <audio>는 아이폰 '무음 스위치'가 켜져 있으면 소리가 안 난다.
+  // Web Audio(AudioContext)는 무음 스위치와 무관하게 재생되므로 교회 환경에 적합.
   let voiceOn = false;
-  const audioQueue = [];
+  let audioCtx = null;
+  const audioQueue = [];   // base64 문자열 대기열
   let playing = false;
+
+  function ensureAudioCtx() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  }
 
   function toggleVoice() {
     voiceOn = !voiceOn;
     document.getElementById("voice-btn").textContent = voiceOn ? "🔊" : "🔇";
-    if (!voiceOn) { audioQueue.length = 0; }
-    else {
-      // iOS 자동재생 정책: 사용자 제스처 시점에 오디오 잠금 해제
-      try { const a = new Audio(); a.play().catch(() => {}); } catch (e) {}
+    if (!voiceOn) { audioQueue.length = 0; return; }
+    // 사용자 제스처 시점: 오디오 잠금 해제 (무음 버퍼 1회 재생)
+    const ctx = ensureAudioCtx();
+    if (ctx) {
+      try {
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf; src.connect(ctx.destination); src.start(0);
+      } catch (e) {}
     }
+  }
+
+  function b64ToArrayBuffer(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
   }
 
   function enqueueAudio(b64) {
@@ -280,10 +306,24 @@
     const b64 = audioQueue.shift();
     if (!b64) { playing = false; return; }
     playing = true;
-    const a = new Audio("data:audio/mp3;base64," + b64);
-    a.onended = playNext;
-    a.onerror = playNext;
-    a.play().catch(() => { playing = false; });
+    const ctx = ensureAudioCtx();
+    if (!ctx) { playing = false; return; }
+    let arr;
+    try { arr = b64ToArrayBuffer(b64); }
+    catch (e) { playNext(); return; }
+    ctx.decodeAudioData(
+      arr,
+      (audioBuf) => {
+        try {
+          const src = ctx.createBufferSource();
+          src.buffer = audioBuf;
+          src.connect(ctx.destination);
+          src.onended = playNext;
+          src.start(0);
+        } catch (e) { playNext(); }
+      },
+      () => { playNext(); }           // 디코딩 실패 시 다음 것으로
+    );
   }
 
   // 언어 변경: 자막을 비우고 새 언어로 재연결
