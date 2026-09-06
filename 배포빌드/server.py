@@ -790,6 +790,7 @@ class Segmenter:
 
     FORCE_SEC = 7.0        # 이 시간 넘게 자막이 안 나가면
     FORCE_MIN_CHARS = 30   # 그리고 이만큼 쌓였으면 강제로 끊는다
+    REWIND_MAX = 40        # 최종 결과가 앞부분을 고쳤을 때 되돌릴 수 있는 최대 글자 수
 
     def __init__(self, now):
         self.sent_len = 0
@@ -884,11 +885,15 @@ class Segmenter:
         return self._take(self.prev, len(self.prev) - self.sent_len, now)
 
     def on_final(self, transcript, now):
-        # 인식기가 앞부분을 고쳐 최종 문장이 달라질 수 있다. 이미 내보낸 글자와
-        # 갈라지는 지점부터 다시 내보낸다 — 겹치는 편이 빠뜨리는 것보다 낫다.
+        # 인식기는 발화가 끝날 때 앞부분 표현을 통째로 고쳐 쓰기도 한다.
+        # 갈라지는 지점까지 되돌리되 REWIND_MAX 글자까지만 되돌린다.
+        # 많이 어긋났는데 그대로 되돌리면, 이미 나갔던 자막 서너 문장이
+        # 20초쯤 뒤에 통째로 다시 나온다(실제로 겪음). 조금 빠뜨리는 편이 낫다.
         start = self.sent_len
         if not transcript.startswith(self.emitted):
-            start = min(start, self._common_len(self.emitted, transcript))
+            n = self._common_len(self.emitted, transcript)
+            if self.sent_len - n <= self.REWIND_MAX:
+                start = n
         out = self._split_new(transcript[start:]) if len(transcript) > start else []
         self.sent_len = 0
         self.prev = ""
