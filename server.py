@@ -5,6 +5,7 @@ import os
 import io
 import json
 import queue
+import re
 import threading
 import anthropic
 from flask import Flask, request, jsonify, Response, send_from_directory
@@ -655,6 +656,140 @@ def tunnel_url():
     return jsonify({"url": ""})
 
 
+# ===== 문장 끊기 — 자막을 언제 내보낼지 정한다 =====
+# 세 가지 신호를 함께 쓴다. 앞의 것이 걸리면 뒤의 것은 필요 없다.
+#  1) 음성 활동 종료(VAD): 구글이 "말이 멈췄다"고 알려주면 그 자리에서 끊는다.
+#     추측이 아니라 인식기가 직접 준 신호라 가장 정확하다.
+#  2) LocalAgreement: 연속 두 번의 인식 결과가 '일치하는 앞부분'만 확정한다.
+#     (ufal/whisper_streaming 방식) 곧 바뀔 글자를 미리 번역하는 일이 없어진다.
+#  3) 시간 강제 끊기: 위 둘이 오래 안 걸릴 때를 위한 안전망. 스페인어처럼
+#     마침표가 안 붙는 언어에서 송출 화면이 1분씩 멈추는 것을 막는다.
+_SENT_END_CHARS = ".?!。？！…"
+_SENT_SPLIT = re.compile(r'(?<=[\.\?\!。？！…])\s*')
+
+
+def split_sentences(t):
+    """문장부호 뒤에서 자른다. 부호는 앞 문장에 포함해 반환."""
+    return [p for p in _SENT_SPLIT.split(t) if p.strip()]
+
+
+class Segmenter:
+    """인식 중간 결과를 받아 '번역해도 안전한 조각'만 돌려준다.
+
+    한 번의 인식 스트림마다 하나씩 새로 만든다.
+    sent_len은 '이번 발화에서 이미 내보낸 글자 수'이며, 발화가 끝나면 0으로 돌아간다.
+    """
+
+    FORCE_SEC = 7.0        # 이 시간 넘게 자막이 안 나가면
+    FORCE_MIN_CHARS = 30   # 그리고 이만큼 쌓였으면 강제로 끊는다
+
+    def __init__(self, now):
+        self.sent_len = 0
+        self.prev = ""              # 직전 중간 결과 (LocalAgreement 비교용)
+        self.emitted = ""           # 이미 내보낸 원문 (최종 결과와 대조용)
+        self.last_sent_at = now
+        self.recent = _deque(maxlen=8)   # 같은 발화 안에서의 중복 방지
+
+    # ── 내부 도구 ──
+    @staticmethod
+    def _common_len(a, b):
+        n = 0
+        for x, y in zip(a, b):
+            if x != y:
+                break
+            n += 1
+        return n
+
+    @classmethod
+    def _agreed(cls, prev, cur):
+        """직전 결과와 현재 결과가 일치하는 앞부분을 단어 경계까지 잘라 돌려준다.
+        마지막 단어는 아직 바뀔 수 있으므로 떼어낸다."""
+        n = cls._common_len(prev, cur)
+        if n == 0:
+            return ""
+        if n < len(cur):
+            cut = cur.rfind(" ", 0, n)
+            return cur[:cut] if cut > 0 else ""
+        return cur[:n]
+
+    @staticmethod
+    def _last_sentence_end(t):
+        """마지막 문장부호 바로 다음 위치. 완성된 문장이 없으면 0."""
+        for i in range(len(t) - 1, -1, -1):
+            if t[i] in _SENT_END_CHARS:
+                return i + 1
+        return 0
+
+    @staticmethod
+    def force_cut(t):
+        """쉼표류가 뒤쪽에 있으면 거기서, 없으면 마지막 띄어쓰기에서 끊는다."""
+        for mark in (",", ";", ":", "、", "，"):
+            i = t.rfind(mark)
+            if i >= len(t) * 0.4:
+                return t[:i + 1]
+        i = t.rfind(" ")
+        if i >= len(t) * 0.5:
+            return t[:i]
+        return t   # 끊을 자리가 없으면 통째로
+
+    def _split_new(self, raw):
+        out = []
+        for p in split_sentences(raw):
+            s = p.strip()
+            if s and s not in self.recent:
+                self.recent.append(s)
+                out.append(s)
+        return out
+
+    def _take(self, transcript, cut, now):
+        """transcript에서 앞으로 cut글자를 확정해 문장 단위로 돌려준다."""
+        raw = transcript[self.sent_len:self.sent_len + cut]
+        self.emitted += raw
+        self.sent_len += cut
+        self.last_sent_at = now
+        return self._split_new(raw)
+
+    # ── 바깥에서 부르는 것 ──
+    def on_interim(self, transcript, now):
+        confirmed = self._agreed(self.prev, transcript)
+        self.prev = transcript
+        # 2) 두 번 연속 일치한 부분에 완성된 문장이 있으면 그것부터 내보낸다
+        if len(confirmed) > self.sent_len:
+            cut = self._last_sentence_end(confirmed[self.sent_len:])
+            if cut:
+                return self._take(transcript, cut, now)
+        # 3) 안전망 — 오래 안 나갔으면 확정 여부와 상관없이 끊어 보낸다.
+        #    (스페인어처럼 마침표가 안 붙고 인식 결과도 계속 흔들리는 경우)
+        if (now - self.last_sent_at >= self.FORCE_SEC
+                and len(transcript) > self.sent_len):
+            pending = transcript[self.sent_len:]
+            if len(pending.strip()) >= self.FORCE_MIN_CHARS:
+                chunk = self.force_cut(pending)
+                if chunk.strip():
+                    return self._take(transcript, len(chunk), now)
+        return []
+
+    def on_speech_end(self, now):
+        """1) 구글이 '말이 멈췄다'고 알림 → 남은 것을 전부 내보낸다."""
+        if len(self.prev) <= self.sent_len:
+            return []
+        return self._take(self.prev, len(self.prev) - self.sent_len, now)
+
+    def on_final(self, transcript, now):
+        # 인식기가 앞부분을 고쳐 최종 문장이 달라질 수 있다. 이미 내보낸 글자와
+        # 갈라지는 지점부터 다시 내보낸다 — 겹치는 편이 빠뜨리는 것보다 낫다.
+        start = self.sent_len
+        if not transcript.startswith(self.emitted):
+            start = min(start, self._common_len(self.emitted, transcript))
+        out = self._split_new(transcript[start:]) if len(transcript) > start else []
+        self.sent_len = 0
+        self.prev = ""
+        self.emitted = ""
+        self.last_sent_at = now
+        self.recent.clear()
+        return out
+
+
 @sock.route("/audio")
 def audio_socket(ws):
     """브라우저에서 16kHz PCM 오디오를 받아 Google Speech로 스트리밍 인식 → 번역."""
@@ -695,7 +830,12 @@ def audio_socket(ws):
         speech_contexts=speech_contexts,
     )
     streaming_config = speech.StreamingRecognitionConfig(
-        config=recog_config, interim_results=True
+        config=recog_config,
+        interim_results=True,
+        # 말이 멈추면 SPEECH_ACTIVITY_END 이벤트가 온다 → 그 자리에서 문장을 끊는다.
+        # (voice_activity_timeout은 켜지 않는다. 그건 침묵이 길면 스트림을 닫아버려
+        #  찬양·기도 중에 인식이 끊긴다.)
+        enable_voice_activity_events=True,
     )
 
     audio_q = queue.Queue()
@@ -734,80 +874,40 @@ def audio_socket(ws):
         my_session = _current_session
     reset_context()   # 새 마이크 세션: 이전 발화 문맥 초기화
 
-    import re as _re
     import time as _time
 
-    def split_sentences(t):
-        # 문장부호(. ? ! 。 ？ ！ …) 뒤에서 자른다. 부호를 포함해 반환.
-        parts = _re.split(r'(?<=[\.\?\!。？！…])\s*', t)
-        return [p for p in parts if p.strip()]
-
-    # ── 자막 멈춤 방지 ────────────────────────────────────────────────
-    # 한국어 인식은 말하는 중에도 마침표를 잘 찍어주지만, 스페인어 등 일부
-    # 언어는 마침표 없이 1분 넘게 이어붙인다. 그러면 아래 '완성된 문장' 조건이
-    # 계속 거짓이라 발화가 끝날 때까지 송출 화면이 멈춘 것처럼 보인다.
-    # → 마지막 전송 후 FORCE_SEC 이상 지나고 FORCE_MIN_CHARS 이상 쌓이면
-    #   쉼표·띄어쓰기 경계에서 끊어 먼저 번역해 내보낸다.
-    FORCE_SEC = 7.0        # 이 시간 넘게 자막이 안 나가면
-    FORCE_MIN_CHARS = 30   # 그리고 이만큼 쌓였으면 강제로 끊는다
-
-    def force_cut(t):
-        # 쉼표류가 뒤쪽 절반에 있으면 거기서, 없으면 마지막 띄어쓰기에서 끊는다.
-        for mark in (",", ";", ":", "、", "，", "…"):
-            i = t.rfind(mark)
-            if i >= len(t) * 0.4:
-                return t[:i + 1]
-        i = t.rfind(" ")
-        if i >= len(t) * 0.5:
-            return t[:i]
-        return t   # 끊을 자리가 없으면 통째로
-
-    translated = []  # 현재 발화에서 이미 번역에 보낸 문장(텍스트로 중복 제거)
-    sent_len = 0     # 이번 발화에서 강제로 끊어 보낸 앞부분의 길이(글자 수)
-    last_sent_at = _time.time()
+    _SPEECH_END = speech.StreamingRecognizeResponse.SpeechEventType.SPEECH_ACTIVITY_END
 
     # 5분 제한 대응: 스트림이 끝나면 다시 연결 (음성 큐는 유지)
     while not stop_flag["stop"]:
         try:
+            # 스트림마다 새로 만든다. 글자 위치(sent_len)가 그 스트림 기준이라
+            # 스트림이 바뀌면 이어 쓸 수 없다.
+            seg = Segmenter(_time.time())
             responses = speech_client.streaming_recognize(streaming_config, request_gen())
             for response in responses:
-                for result in response.results:
+                now = _time.time()
+                # 1) 말이 멈췄다는 신호 — 남은 조각을 바로 내보낸다
+                if response.speech_event_type == _SPEECH_END:
+                    for s in seg.on_speech_end(now):
+                        enqueue_translation(s, source_name, my_session)
+                # 구글은 한 응답에 두 가지를 함께 보낸다.
+                #   results[0] = 지금까지의 전체 문장 (안정도 0.9 수준)
+                #   results[1] = 아직 흔들리는 뒷조각 (안정도 0.01 수준)
+                # 뒷조각까지 문장 끊기에 넣으면 앞뒤가 뒤섞여 아무것도 확정하지
+                # 못한다. 화면에 보여줄 것도 [0]이므로 [0]만 쓴다.
+                if response.results:
+                    result = response.results[0]
                     transcript = result.alternatives[0].transcript
-                    if not transcript.strip():
-                        continue
-                    # 강제로 끊어 이미 보낸 앞부분은 빼고 본다
-                    rest = transcript[sent_len:] if len(transcript) > sent_len else ""
-                    pieces = split_sentences(rest)
-
-                    if result.is_final:
-                        operator_queue.put(("input", transcript.strip()))
-                        # 아직 안 보낸 문장(끝 미완성 조각 포함)을 모두 번역
-                        for p in pieces:
-                            n = p.strip()
-                            if n and n not in translated:
-                                enqueue_translation(n, source_name, my_session)
-                        translated = []  # 다음 발화 위해 초기화
-                        sent_len = 0
-                        last_sent_at = _time.time()
-                    else:
-                        operator_queue.put(("interim", transcript.strip()))
-                        # 마침표로 '완성된' 문장만 즉시 번역 (마지막 미완성 조각 제외)
-                        if len(pieces) >= 2:
-                            complete = pieces[:-1]
-                            for p in complete:
-                                n = p.strip()
-                                if n and n not in translated:
-                                    translated.append(n)
-                                    enqueue_translation(n, source_name, my_session)
-                                    last_sent_at = _time.time()
-                        # 마침표가 안 붙은 채 너무 오래 쌓이면 강제로 끊어 보낸다
-                        elif (_time.time() - last_sent_at >= FORCE_SEC
-                              and len(rest.strip()) >= FORCE_MIN_CHARS):
-                            chunk = force_cut(rest)
-                            if chunk.strip():
-                                enqueue_translation(chunk.strip(), source_name, my_session)
-                                sent_len += len(chunk)
-                                last_sent_at = _time.time()
+                    if transcript.strip():
+                        if result.is_final:
+                            operator_queue.put(("input", transcript.strip()))
+                            for s in seg.on_final(transcript, now):
+                                enqueue_translation(s, source_name, my_session)
+                        else:
+                            operator_queue.put(("interim", transcript.strip()))
+                            for s in seg.on_interim(transcript, now):
+                                enqueue_translation(s, source_name, my_session)
         except Exception as e:
             operator_queue.put(("stt_error", str(e)[:120]))
             if stop_flag["stop"]:
