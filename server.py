@@ -680,13 +680,15 @@ class Segmenter:
     sent_len은 '이번 발화에서 이미 내보낸 글자 수'이며, 발화가 끝나면 0으로 돌아간다.
     """
 
-    FORCE_SEC = 7.0        # 이 시간 넘게 자막이 안 나가면
+    FORCE_SEC = 5.0        # 이 시간 넘게 자막이 안 나가면
     FORCE_MIN_CHARS = 30   # 그리고 이만큼 쌓였으면 강제로 끊는다
     REWIND_MAX = 40        # 최종 결과가 앞부분을 고쳤을 때 되돌릴 수 있는 최대 글자 수
+    SLOW_INTERIM_SEC = 1.5  # 중간 결과가 이보다 드물게 오면 '느린 엔진'으로 본다
 
     def __init__(self, now):
         self.sent_len = 0
         self.prev = ""              # 직전 중간 결과 (LocalAgreement 비교용)
+        self.prev_at = now          # 직전 중간 결과가 온 시각
         self.emitted = ""           # 이미 내보낸 원문 (최종 결과와 대조용)
         self.last_sent_at = now
         self.recent = _deque(maxlen=8)   # 같은 발화 안에서의 중복 방지
@@ -733,11 +735,17 @@ class Segmenter:
             return t[:i]
         return t   # 끊을 자리가 없으면 통째로
 
+    @staticmethod
+    def _worth_translating(s):
+        # 글자가 하나도 없는 조각(마침표만, 공백만)은 번역에 보내지 않는다.
+        # 보내면 Claude가 "번역할 내용이 없습니다" 같은 문장을 자막으로 내보낸다.
+        return len(s) >= 2 and re.search(r"\w", s) is not None
+
     def _split_new(self, raw):
         out = []
         for p in split_sentences(raw):
             s = p.strip()
-            if s and s not in self.recent:
+            if s and s not in self.recent and self._worth_translating(s):
                 self.recent.append(s)
                 out.append(s)
         return out
@@ -752,8 +760,15 @@ class Segmenter:
 
     # ── 바깥에서 부르는 것 ──
     def on_interim(self, transcript, now):
-        confirmed = self._agreed(self.prev, transcript)
+        # LocalAgreement의 값어치는 중간 결과가 얼마나 자주 오느냐에 달려 있다.
+        #   V1(latest_long) : 0.25초마다 → 한 번 더 기다려도 손해가 없다
+        #   chirp_3         : 6초마다    → 두 번 기다리면 12초 지연이 된다
+        # 드물게 오는 엔진에서는 이번 결과를 그대로 믿는다. 드물게 온다는 것은
+        # 인식기가 이미 한 번 정리해서 보냈다는 뜻이다.
+        slow = (now - self.prev_at) >= self.SLOW_INTERIM_SEC
+        confirmed = transcript if slow else self._agreed(self.prev, transcript)
         self.prev = transcript
+        self.prev_at = now
         # 2) 두 번 연속 일치한 부분에 완성된 문장이 있으면 그것부터 내보낸다
         if len(confirmed) > self.sent_len:
             cut = self._last_sentence_end(confirmed[self.sent_len:])
@@ -789,6 +804,7 @@ class Segmenter:
         out = self._split_new(transcript[start:]) if len(transcript) > start else []
         self.sent_len = 0
         self.prev = ""
+        self.prev_at = now
         self.emitted = ""
         self.last_sent_at = now
         self.recent.clear()
