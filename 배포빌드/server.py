@@ -307,13 +307,64 @@ def load_mapping():
 load_mapping()
 
 
-def _log_translation(src, out):
+# ===== 번역 비용 추적 =====
+# claude-opus-4-8 요금(100만 토큰당 달러). 캐시 기록은 1.25배, 캐시 읽기는 0.1배.
+PRICE_IN, PRICE_OUT = 5.00, 25.00
+PRICE_CACHE_WRITE, PRICE_CACHE_READ = PRICE_IN * 1.25, PRICE_IN * 0.10
+
+_cost_total = 0.0          # 프로그램 켠 뒤 누적(대표 언어 + 폰이 고른 언어 전부)
+_cache_miss_streak = 0     # 캐시가 연속으로 빗나간 횟수
+_cost_lock = threading.Lock()
+
+
+def _usage_cost(u):
+    return (getattr(u, "input_tokens", 0) * PRICE_IN
+            + getattr(u, "cache_creation_input_tokens", 0) * PRICE_CACHE_WRITE
+            + getattr(u, "cache_read_input_tokens", 0) * PRICE_CACHE_READ
+            + getattr(u, "output_tokens", 0) * PRICE_OUT) / 1e6
+
+
+def _track_cost(u):
+    """이번 호출 비용을 누적하고, 캐시가 계속 빗나가면 경고 문구를 돌려준다.
+    설교 원고처럼 큰 프롬프트는 캐시가 적중해야 값이 1/12로 떨어진다.
+    프롬프트 앞쪽이 매 문장 바뀌면 캐시가 통째로 무효가 되어 요금이 폭증한다."""
+    global _cost_total, _cache_miss_streak
+    if u is None:
+        return None, 0.0
+    cost = _usage_cost(u)
+    warn = None
+    with _cost_lock:
+        _cost_total += cost
+        if (getattr(u, "cache_creation_input_tokens", 0) >= 1000
+                and getattr(u, "cache_read_input_tokens", 0) == 0):
+            _cache_miss_streak += 1
+            if _cache_miss_streak in (10, 50, 200) or _cache_miss_streak % 500 == 0:
+                warn = ("[경고] 캐시 미적중 %d회 연속 — 큰 프롬프트가 매번 새로 청구되고 "
+                        "있습니다. 요금이 10배 이상 늘어납니다." % _cache_miss_streak)
+        else:
+            _cache_miss_streak = 0
+        total = _cost_total
+    return warn, total
+
+
+def _log_translation(src, out, usage=None, warn=None, total=0.0):
     try:
         path = os.path.join(APP_DIR, "로그.txt")
         import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         with open(path, "a", encoding="utf-8") as f:
-            f.write(f"[{ts}] 입력: {src}\n[{ts}] 번역: {out}\n\n")
+            f.write(f"[{ts}] 입력: {src}\n[{ts}] 번역: {out}\n")
+            if usage is not None:
+                f.write("[%s] 토큰: 입력 %d · 캐시읽기 %d · 캐시기록 %d · 출력 %d"
+                        " | 이번 $%.4f · 누적 $%.2f\n"
+                        % (ts, getattr(usage, "input_tokens", 0),
+                           getattr(usage, "cache_read_input_tokens", 0),
+                           getattr(usage, "cache_creation_input_tokens", 0),
+                           getattr(usage, "output_tokens", 0),
+                           _usage_cost(usage), total))
+            if warn:
+                f.write(f"[{ts}] {warn}\n")
+            f.write("\n")
     except Exception:
         pass
 
@@ -355,11 +406,16 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
             "Only translate the user's given text.\n\n"
             "--- SERMON REFERENCE (do not output) ---\n" + sermon_context[:8000] + "\n--- END ---"
         )
+        # 캐시는 '앞에서부터' 같아야 적중한다. 문맥(context_block)은 문장마다
+        # 달라지므로 반드시 캐시 블록 뒤에 둔다. 앞에 두면 설교 원고 5천여
+        # 토큰이 매 문장 새로 청구되어 요금이 6배 이상 뛴다. (실제로 겪음)
         system = [
-            {"type": "text", "text": base_instruction + mapping_text + context_block},
+            {"type": "text", "text": base_instruction + mapping_text},
             {"type": "text", "text": reference,
              "cache_control": {"type": "ephemeral"}},
         ]
+        if context_block:
+            system.append({"type": "text", "text": context_block})
     else:
         system = base_instruction + mapping_text + context_block
 
@@ -371,6 +427,7 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
     max_out = max(256, min(1024, len(text) * 4))
 
     result = []
+    usage = None
     with get_client().messages.stream(
         model="claude-opus-4-8",
         max_tokens=max_out,
@@ -382,12 +439,20 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
             hub.publish(target_lang, chunk, is_primary)
             if is_primary:
                 operator_queue.put(("output_chunk", chunk))
+        try:
+            usage = stream.get_final_message().usage
+        except Exception:
+            usage = None
 
     out = "".join(result)
     hub.publish(target_lang, "__done__", is_primary)
+    # 비용은 모든 언어를 합산하고, 로그 줄은 대표 언어에만 남긴다
+    warn, total = _track_cost(usage)
+    if warn:
+        print(warn)
     if is_primary:
         last_output = out
-        _log_translation(text, out)
+        _log_translation(text, out, usage, warn, total)
         operator_queue.put(("done", ""))
 
     # 번역 음성(TTS): 운영자가 켰을 때만, 각 언어 셀폰(이어폰)으로 방송.
