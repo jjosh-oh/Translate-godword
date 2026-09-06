@@ -158,6 +158,9 @@ settings = {
     "target_lang": "English",
     "source_lang": "Korean",
     "voice": False,   # 번역 음성(TTS) 사용 여부 (운영자 토글, 기본 꺼짐)
+    # 음성인식 엔진: "v1" = 지금까지 쓰던 latest_long, "chirp3" = 새 모델(V2)
+    # 기본값은 v1. 운영자 화면에서 바꿔 같은 설교로 비교할 수 있다.
+    "stt_engine": "v1",
 }
 
 # 번역 언어 이름 → Google TTS 언어 코드
@@ -790,42 +793,70 @@ class Segmenter:
         return out
 
 
-@sock.route("/audio")
-def audio_socket(ws):
-    """브라우저에서 16kHz PCM 오디오를 받아 Google Speech로 스트리밍 인식 → 번역."""
+# ===== 음성인식 엔진 =====
+# 두 엔진 모두 아래 형태의 이벤트만 내보낸다. 바깥(audio_socket)은 어느 엔진인지
+# 몰라도 된다.
+#   ("stream_start", "")  새 인식 스트림 시작 — 문장 끊기를 새로 시작하라
+#   ("speech_end",   "")  말이 멈췄다
+#   ("interim",   본문)   아직 말하는 중
+#   ("final",     본문)   한 발화가 끝났다
+#   ("error",     메시지) 인식 오류
+
+
+def _google_project_id():
+    """구글 프로젝트 ID를 찾는다 (V2 API에 필요).
+    인증 파일은 두 종류다.
+      - 서비스 계정 JSON        → project_id
+      - gcloud 사용자 인증(ADC) → quota_project_id
+    둘 다 없으면 google.auth가 아는 기본 프로젝트를 쓴다."""
+    for key in ("GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_QUOTA_PROJECT"):
+        if os.environ.get(key):
+            return os.environ[key]
+    path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        pid = d.get("project_id") or d.get("quota_project_id")
+        if pid:
+            return pid
+    except Exception:
+        pass
+    try:
+        import google.auth
+        return google.auth.default()[1] or ""
+    except Exception:
+        return ""
+
+
+def _stt_hint_phrases(src_code):
+    """인식 힌트로 줄 단어들. 용어집·설교 원고는 한국어 목록이므로
+    원어가 한국어일 때만 쓴다 (다른 언어에 주면 정확도가 오히려 나빠진다)."""
+    if not src_code.startswith("ko"):
+        return []
+    out = list(glossary_terms)
+    if sermon_context:
+        from collections import Counter
+        words = re.findall(r"[가-힣]{2,}", sermon_context)
+        out += [w for w, _ in Counter(words).most_common(300)]
+    return out
+
+
+def _stt_events_v1(src_code, audio_q, stop_flag):
+    """지금까지 쓰던 엔진 — Speech-to-Text V1, latest_long + enhanced."""
     from google.cloud import speech
 
-    # 첫 메시지: 설정(JSON)
-    cfg_raw = ws.receive()
-    cfg = json.loads(cfg_raw)
-    src_code = STT_LANG.get(cfg.get("source_lang_code"), "ko-KR")
-    source_name = STT_TO_NAME.get(cfg.get("source_lang_code"), "Korean")
-    target_lang = cfg.get("target_lang", "English")
-
-    # 인식 힌트(speech adaptation)
-    # 용어집·설교 원고는 모두 '한국어' 단어 목록이다. 원어가 스페인어 등 다른
-    # 언어일 때 이걸 힌트로 주면 인식 정확도와 자동 문장부호가 오히려 나빠진다.
-    ko_source = src_code.startswith("ko")
+    phrases = _stt_hint_phrases(src_code)
     speech_contexts = []
-    # 1) 교회 용어집 — 모든 항목을 높은 가중치로(고유명사 사전)
-    if glossary_terms and ko_source:
-        speech_contexts.append(speech.SpeechContext(phrases=glossary_terms[:4000], boost=20.0))
-    # 2) 오늘 설교 원고에서 자주 나오는 단어 — 보조 힌트
-    if sermon_context and ko_source:
-        import re as _re2
-        from collections import Counter
-        words = _re2.findall(r"[가-힣]{2,}", sermon_context)
-        common = [w for w, _ in Counter(words).most_common(300)]
-        if common:
-            speech_contexts.append(speech.SpeechContext(phrases=common, boost=12.0))
+    if phrases:
+        speech_contexts.append(speech.SpeechContext(phrases=phrases[:4000], boost=20.0))
 
-    speech_client = speech.SpeechClient()
+    client = speech.SpeechClient()
     recog_config = speech.RecognitionConfig(
         encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
         sample_rate_hertz=16000,
         language_code=src_code,
         enable_automatic_punctuation=True,
-        model="latest_long",        # 긴 발화에 적합한 최신 모델
+        model="latest_long",        # 긴 발화에 적합한 모델
         use_enhanced=True,          # 고품질(enhanced) 모델 사용
         speech_contexts=speech_contexts,
     )
@@ -837,6 +868,124 @@ def audio_socket(ws):
         #  찬양·기도 중에 인식이 끊긴다.)
         enable_voice_activity_events=True,
     )
+    END = speech.StreamingRecognizeResponse.SpeechEventType.SPEECH_ACTIVITY_END
+
+    def request_gen():
+        while not stop_flag["stop"]:
+            chunk = audio_q.get()
+            if chunk is None:
+                return
+            yield speech.StreamingRecognizeRequest(audio_content=chunk)
+
+    # 구글 스트림은 약 5분 제한 → 끝나면 다시 연결 (음성 큐는 유지)
+    while not stop_flag["stop"]:
+        try:
+            yield ("stream_start", "")
+            for response in client.streaming_recognize(streaming_config, request_gen()):
+                if response.speech_event_type == END:
+                    yield ("speech_end", "")
+                # 한 응답에 results[0]=지금까지의 전체 문장(안정도 0.9),
+                # results[1]=아직 흔들리는 뒷조각(0.01)이 함께 온다. [0]만 쓴다.
+                if response.results:
+                    r = response.results[0]
+                    tr = r.alternatives[0].transcript
+                    if tr.strip():
+                        yield ("final" if r.is_final else "interim", tr)
+        except Exception as e:
+            yield ("error", str(e)[:120])
+            if stop_flag["stop"]:
+                break
+
+
+def _stt_events_chirp3(src_code, audio_q, stop_flag):
+    """새 엔진 — Speech-to-Text V2의 chirp_3.
+    V1보다 좋은 점: 인식 정확도, 내장 잡음제거(반주·잔향), 그리고 custom_prompt로
+    오늘 설교의 고유명사를 인식 단계에서 직접 알려줄 수 있다."""
+    from google.api_core.client_options import ClientOptions
+    from google.cloud.speech_v2 import SpeechClient
+    from google.cloud.speech_v2.types import cloud_speech as t
+
+    project = _google_project_id()
+    if not project:
+        yield ("error", "chirp3: 서비스 계정 JSON에서 프로젝트 ID를 못 읽었습니다")
+        return
+
+    # chirp_3는 us / eu 멀티리전에서 제공된다. 리전 전용 엔드포인트로 붙어야 한다.
+    location = "us"
+    client = SpeechClient(client_options=ClientOptions(
+        api_endpoint="%s-speech.googleapis.com" % location))
+    recognizer = "projects/%s/locations/%s/recognizers/_" % (project, location)
+
+    features = t.RecognitionFeatures(enable_automatic_punctuation=True)
+    # 오늘 설교 원고가 있으면 '무엇에 대한 설교인지'를 인식기에 직접 알려준다.
+    if sermon_context:
+        head = sermon_context[:1200].replace("\n", " ")
+        features.custom_prompt_config = t.CustomPromptConfig(
+            custom_prompt=("This is a live Christian sermon. Transcribe faithfully with "
+                           "punctuation. Today's sermon covers: " + head))
+
+    config = t.RecognitionConfig(
+        explicit_decoding_config=t.ExplicitDecodingConfig(
+            encoding=t.ExplicitDecodingConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=16000, audio_channel_count=1),
+        language_codes=[src_code],
+        model="chirp_3",
+        features=features,
+        # 본당 반주·잔향을 줄인다. (사람 목소리는 못 지운다)
+        denoiser_config=t.DenoiserConfig(denoise_audio=True),
+    )
+    phrases = _stt_hint_phrases(src_code)[:1000]   # chirp_3는 1,000개 제한
+    if phrases:
+        config.adaptation = t.SpeechAdaptation(phrase_sets=[
+            t.SpeechAdaptation.AdaptationPhraseSet(
+                inline_phrase_set=t.PhraseSet(
+                    phrases=[t.PhraseSet.Phrase(value=p, boost=20.0) for p in phrases]))])
+
+    streaming_config = t.StreamingRecognitionConfig(
+        config=config,
+        streaming_features=t.StreamingRecognitionFeatures(
+            interim_results=True, enable_voice_activity_events=True),
+    )
+    END = t.StreamingRecognizeResponse.SpeechEventType.SPEECH_ACTIVITY_END
+
+    def request_gen():
+        # V2는 첫 요청에 리코그나이저와 설정을 함께 보낸다
+        yield t.StreamingRecognizeRequest(
+            recognizer=recognizer, streaming_config=streaming_config)
+        while not stop_flag["stop"]:
+            chunk = audio_q.get()
+            if chunk is None:
+                return
+            yield t.StreamingRecognizeRequest(audio=chunk)
+
+    while not stop_flag["stop"]:
+        try:
+            yield ("stream_start", "")
+            for response in client.streaming_recognize(requests=request_gen()):
+                if response.speech_event_type == END:
+                    yield ("speech_end", "")
+                if response.results:
+                    r = response.results[0]
+                    if not r.alternatives:
+                        continue
+                    tr = r.alternatives[0].transcript
+                    if tr.strip():
+                        yield ("final" if r.is_final else "interim", tr)
+        except Exception as e:
+            yield ("error", "chirp3: " + str(e)[:110])
+            if stop_flag["stop"]:
+                break
+
+
+@sock.route("/audio")
+def audio_socket(ws):
+    """브라우저에서 16kHz PCM 오디오를 받아 Google Speech로 스트리밍 인식 → 번역."""
+    # 첫 메시지: 설정(JSON)
+    cfg_raw = ws.receive()
+    cfg = json.loads(cfg_raw)
+    src_code = STT_LANG.get(cfg.get("source_lang_code"), "ko-KR")
+    source_name = STT_TO_NAME.get(cfg.get("source_lang_code"), "Korean")
+    target_lang = cfg.get("target_lang", "English")
 
     audio_q = queue.Queue()
     stop_flag = {"stop": False}
@@ -859,14 +1008,6 @@ def audio_socket(ws):
     recv_thread = threading.Thread(target=receiver, daemon=True)
     recv_thread.start()
 
-    def request_gen():
-        # Google 스트림은 약 5분 제한 → 호출부에서 재시작
-        while not stop_flag["stop"]:
-            chunk = audio_q.get()
-            if chunk is None:
-                return
-            yield speech.StreamingRecognizeRequest(audio_content=chunk)
-
     # 이 연결의 세션 ID (마이크를 끄면 무효화되어 대기 중 번역이 폐기됨)
     global _current_session
     with _session_lock:
@@ -876,42 +1017,31 @@ def audio_socket(ws):
 
     import time as _time
 
-    _SPEECH_END = speech.StreamingRecognizeResponse.SpeechEventType.SPEECH_ACTIVITY_END
+    engine = settings.get("stt_engine", "v1")
+    events = (_stt_events_chirp3 if engine == "chirp3" else _stt_events_v1)(
+        src_code, audio_q, stop_flag)
+    operator_queue.put(("stt_engine", engine))
 
-    # 5분 제한 대응: 스트림이 끝나면 다시 연결 (음성 큐는 유지)
-    while not stop_flag["stop"]:
-        try:
+    seg = Segmenter(_time.time())
+    for kind, text in events:
+        now = _time.time()
+        if kind == "stream_start":
             # 스트림마다 새로 만든다. 글자 위치(sent_len)가 그 스트림 기준이라
             # 스트림이 바뀌면 이어 쓸 수 없다.
-            seg = Segmenter(_time.time())
-            responses = speech_client.streaming_recognize(streaming_config, request_gen())
-            for response in responses:
-                now = _time.time()
-                # 1) 말이 멈췄다는 신호 — 남은 조각을 바로 내보낸다
-                if response.speech_event_type == _SPEECH_END:
-                    for s in seg.on_speech_end(now):
-                        enqueue_translation(s, source_name, my_session)
-                # 구글은 한 응답에 두 가지를 함께 보낸다.
-                #   results[0] = 지금까지의 전체 문장 (안정도 0.9 수준)
-                #   results[1] = 아직 흔들리는 뒷조각 (안정도 0.01 수준)
-                # 뒷조각까지 문장 끊기에 넣으면 앞뒤가 뒤섞여 아무것도 확정하지
-                # 못한다. 화면에 보여줄 것도 [0]이므로 [0]만 쓴다.
-                if response.results:
-                    result = response.results[0]
-                    transcript = result.alternatives[0].transcript
-                    if transcript.strip():
-                        if result.is_final:
-                            operator_queue.put(("input", transcript.strip()))
-                            for s in seg.on_final(transcript, now):
-                                enqueue_translation(s, source_name, my_session)
-                        else:
-                            operator_queue.put(("interim", transcript.strip()))
-                            for s in seg.on_interim(transcript, now):
-                                enqueue_translation(s, source_name, my_session)
-        except Exception as e:
-            operator_queue.put(("stt_error", str(e)[:120]))
-            if stop_flag["stop"]:
-                break
+            seg = Segmenter(now)
+        elif kind == "speech_end":
+            for s in seg.on_speech_end(now):
+                enqueue_translation(s, source_name, my_session)
+        elif kind == "final":
+            operator_queue.put(("input", text.strip()))
+            for s in seg.on_final(text, now):
+                enqueue_translation(s, source_name, my_session)
+        elif kind == "interim":
+            operator_queue.put(("interim", text.strip()))
+            for s in seg.on_interim(text, now):
+                enqueue_translation(s, source_name, my_session)
+        elif kind == "error":
+            operator_queue.put(("stt_error", text))
 
     # 마이크 종료: 이 세션을 무효화해 대기 중인 번역 작업을 폐기
     with _session_lock:

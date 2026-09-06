@@ -385,6 +385,13 @@
           <option value="Arabic">아랍어</option>
         </select>
       </div>
+      <div class="lang-row" style="margin-top:10px; font-size:12px; color:var(--text-2)">
+        <span>음성인식</span>
+        <select id="stt-engine" onchange="onSttEngineChange()">
+          <option value="v1">기본 (latest_long)</option>
+          <option value="chirp3">Chirp 3 (새 모델)</option>
+        </select>
+      </div>
     </div>
 
     <!-- 송출 제어 -->
@@ -620,6 +627,7 @@
     document.getElementById("delay").value = s.delay;
     document.getElementById("delay-val").textContent = s.delay + "s";
     document.getElementById("target-lang-display").value = s.target_lang;
+    if (s.stt_engine) document.getElementById("stt-engine").value = s.stt_engine;
     if ("voice" in s) document.getElementById("voice-toggle").checked = !!s.voice;
   }
 
@@ -652,8 +660,18 @@
         bg_color: document.getElementById("bg-color").value,
         delay: parseInt(document.getElementById("delay").value),
         target_lang: document.getElementById("target-lang-display").value,
+        stt_engine: document.getElementById("stt-engine").value,
       })
     });
+  }
+
+  // 엔진은 마이크를 시작할 때 정해진다 → 켜져 있으면 다시 시작해야 반영된다
+  function onSttEngineChange() {
+    applySettings();
+    if (isListening) {
+      stopMic();
+      setTimeout(() => startMic(), 400);
+    }
   }
 
   // 마이크 장치 목록
