@@ -6,6 +6,7 @@ import sys
 import io
 import json
 import queue
+import re
 import threading
 import anthropic
 from flask import Flask, request, jsonify, Response, send_from_directory
@@ -46,7 +47,7 @@ if os.path.exists(_key_path) and "GOOGLE_APPLICATION_CREDENTIALS" not in os.envi
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _key_path
 
 # 이 프로그램의 버전 — 새 버전 알림 비교 기준 (배포 시 함께 올림)
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
 UPDATE_API = "https://api.github.com/repos/jjosh-oh/Translate-godword/releases/latest"
 
 app = Flask(__name__)
@@ -254,6 +255,9 @@ settings = {
     "target_lang": "English",
     "source_lang": "Korean",
     "voice": False,   # 번역 음성(TTS) 사용 여부 (운영자 토글, 기본 꺼짐)
+    # 음성인식 엔진: "v1" = 지금까지 쓰던 latest_long, "chirp3" = 새 모델(V2)
+    # 기본값은 v1. 운영자 화면에서 바꿔 같은 설교로 비교할 수 있다.
+    "stt_engine": "v1",
 }
 
 # 번역 언어 이름 → Google TTS 언어 코드
@@ -307,13 +311,88 @@ def load_mapping():
 load_mapping()
 
 
-def _log_translation(src, out):
+# ===== 번역 비용 추적 =====
+# claude-opus-4-8 요금(100만 토큰당 달러). 캐시 기록은 1.25배, 캐시 읽기는 0.1배.
+PRICE_IN, PRICE_OUT = 5.00, 25.00
+PRICE_CACHE_WRITE, PRICE_CACHE_READ = PRICE_IN * 1.25, PRICE_IN * 0.10
+
+_cost_total = 0.0          # 프로그램 켠 뒤 누적(대표 언어 + 폰이 고른 언어 전부)
+_cache_miss_streak = 0     # 캐시가 연속으로 빗나간 횟수
+_cost_lock = threading.Lock()
+
+
+def _usage_cost(u):
+    return (getattr(u, "input_tokens", 0) * PRICE_IN
+            + getattr(u, "cache_creation_input_tokens", 0) * PRICE_CACHE_WRITE
+            + getattr(u, "cache_read_input_tokens", 0) * PRICE_CACHE_READ
+            + getattr(u, "output_tokens", 0) * PRICE_OUT) / 1e6
+
+
+def _track_cost(u):
+    """이번 호출 비용을 누적하고, 캐시가 계속 빗나가면 경고 문구를 돌려준다.
+    설교 원고처럼 큰 프롬프트는 캐시가 적중해야 값이 1/12로 떨어진다.
+    프롬프트 앞쪽이 매 문장 바뀌면 캐시가 통째로 무효가 되어 요금이 폭증한다."""
+    global _cost_total, _cache_miss_streak
+    if u is None:
+        return None, 0.0
+    cost = _usage_cost(u)
+    warn = None
+    with _cost_lock:
+        _cost_total += cost
+        if (getattr(u, "cache_creation_input_tokens", 0) >= 1000
+                and getattr(u, "cache_read_input_tokens", 0) == 0):
+            _cache_miss_streak += 1
+            if _cache_miss_streak in (10, 50, 200) or _cache_miss_streak % 500 == 0:
+                warn = ("[경고] 캐시 미적중 %d회 연속 — 큰 프롬프트가 매번 새로 청구되고 "
+                        "있습니다. 요금이 10배 이상 늘어납니다." % _cache_miss_streak)
+        else:
+            _cache_miss_streak = 0
+        total = _cost_total
+    return warn, total
+
+
+_diag_last = {}
+_diag_lock = threading.Lock()
+
+
+def _log_diag(key, msg, min_gap=10.0):
+    """자막 멈춤의 원인을 가리기 위한 진단 기록.
+
+    실제 예배에서만 일어나는 현상이라 로그로 남겨야 알 수 있다.
+    같은 종류는 min_gap 초에 한 번만 남긴다 (로그가 넘치지 않게).
+    기록만 하고 동작은 바꾸지 않는다."""
+    import time as _t
+    now = _t.time()
+    with _diag_lock:
+        if now - _diag_last.get(key, 0) < min_gap:
+            return
+        _diag_last[key] = now
+    try:
+        import datetime
+        with open(os.path.join(APP_DIR, "로그.txt"), "a", encoding="utf-8") as f:
+            f.write("[%s] 진단: %s\n" % (datetime.datetime.now().strftime("%H:%M:%S"), msg))
+    except Exception:
+        pass
+
+
+def _log_translation(src, out, usage=None, warn=None, total=0.0):
     try:
         path = os.path.join(APP_DIR, "로그.txt")
         import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         with open(path, "a", encoding="utf-8") as f:
-            f.write(f"[{ts}] 입력: {src}\n[{ts}] 번역: {out}\n\n")
+            f.write(f"[{ts}] 입력: {src}\n[{ts}] 번역: {out}\n")
+            if usage is not None:
+                f.write("[%s] 토큰: 입력 %d · 캐시읽기 %d · 캐시기록 %d · 출력 %d"
+                        " | 이번 $%.4f · 누적 $%.2f\n"
+                        % (ts, getattr(usage, "input_tokens", 0),
+                           getattr(usage, "cache_read_input_tokens", 0),
+                           getattr(usage, "cache_creation_input_tokens", 0),
+                           getattr(usage, "output_tokens", 0),
+                           _usage_cost(usage), total))
+            if warn:
+                f.write(f"[{ts}] {warn}\n")
+            f.write("\n")
     except Exception:
         pass
 
@@ -355,11 +434,16 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
             "Only translate the user's given text.\n\n"
             "--- SERMON REFERENCE (do not output) ---\n" + sermon_context[:8000] + "\n--- END ---"
         )
+        # 캐시는 '앞에서부터' 같아야 적중한다. 문맥(context_block)은 문장마다
+        # 달라지므로 반드시 캐시 블록 뒤에 둔다. 앞에 두면 설교 원고 5천여
+        # 토큰이 매 문장 새로 청구되어 요금이 6배 이상 뛴다. (실제로 겪음)
         system = [
-            {"type": "text", "text": base_instruction + mapping_text + context_block},
+            {"type": "text", "text": base_instruction + mapping_text},
             {"type": "text", "text": reference,
              "cache_control": {"type": "ephemeral"}},
         ]
+        if context_block:
+            system.append({"type": "text", "text": context_block})
     else:
         system = base_instruction + mapping_text + context_block
 
@@ -371,6 +455,7 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
     max_out = max(256, min(1024, len(text) * 4))
 
     result = []
+    usage = None
     with get_client().messages.stream(
         model="claude-opus-4-8",
         max_tokens=max_out,
@@ -382,12 +467,23 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
             hub.publish(target_lang, chunk, is_primary)
             if is_primary:
                 operator_queue.put(("output_chunk", chunk))
+        try:
+            usage = stream.get_final_message().usage
+        except Exception:
+            usage = None
 
     out = "".join(result)
     hub.publish(target_lang, "__done__", is_primary)
+    # 비용은 모든 언어를 합산하고, 로그 줄은 대표 언어에만 남긴다
+    warn, total = _track_cost(usage)
+    if warn:
+        # print는 창 없는 .exe에서 사라진다. 예배 중에 바로 보이도록
+        # 운영자 화면으로 보낸다. (로그.txt에도 남는다)
+        print(warn)
+        operator_queue.put(("cost_warn", warn))
     if is_primary:
         last_output = out
-        _log_translation(text, out)
+        _log_translation(text, out, usage, warn, total)
         operator_queue.put(("done", ""))
 
     # 번역 음성(TTS): 운영자가 켰을 때만, 각 언어 셀폰(이어폰)으로 방송.
@@ -695,11 +791,402 @@ def tunnel_url():
     return jsonify({"url": ""})
 
 
+# ===== 문장 끊기 — 자막을 언제 내보낼지 정한다 =====
+# 세 가지 신호를 함께 쓴다. 앞의 것이 걸리면 뒤의 것은 필요 없다.
+#  1) 음성 활동 종료(VAD): 구글이 "말이 멈췄다"고 알려주면 그 자리에서 끊는다.
+#     추측이 아니라 인식기가 직접 준 신호라 가장 정확하다.
+#  2) LocalAgreement: 연속 두 번의 인식 결과가 '일치하는 앞부분'만 확정한다.
+#     (ufal/whisper_streaming 방식) 곧 바뀔 글자를 미리 번역하는 일이 없어진다.
+#  3) 시간 강제 끊기: 위 둘이 오래 안 걸릴 때를 위한 안전망. 스페인어처럼
+#     마침표가 안 붙는 언어에서 송출 화면이 1분씩 멈추는 것을 막는다.
+_SENT_END_CHARS = ".?!。？！…"
+_SENT_SPLIT = re.compile(r'(?<=[\.\?\!。？！…])\s*')
+
+
+def split_sentences(t):
+    """문장부호 뒤에서 자른다. 부호는 앞 문장에 포함해 반환."""
+    return [p for p in _SENT_SPLIT.split(t) if p.strip()]
+
+
+class Segmenter:
+    """인식 중간 결과를 받아 '번역해도 안전한 조각'만 돌려준다.
+
+    한 번의 인식 스트림마다 하나씩 새로 만든다.
+    sent_len은 '이번 발화에서 이미 내보낸 글자 수'이며, 발화가 끝나면 0으로 돌아간다.
+    """
+
+    FORCE_SEC = 5.0        # 이 시간 넘게 자막이 안 나가면
+    FORCE_MIN_CHARS = 30   # 그리고 이만큼 쌓였으면 강제로 끊는다
+    REWIND_MAX = 40        # 최종 결과가 앞부분을 고쳤을 때 되돌릴 수 있는 최대 글자 수
+    SLOW_INTERIM_SEC = 1.5  # 중간 결과가 이보다 드물게 오면 '느린 엔진'으로 본다
+
+    def __init__(self, now):
+        self.sent_len = 0
+        self.prev = ""              # 직전 중간 결과 (LocalAgreement 비교용)
+        self.prev_at = now          # 직전 중간 결과가 온 시각
+        self.emitted = ""           # 이미 내보낸 원문 (최종 결과와 대조용)
+        self.last_sent_at = now
+        self.recent = _deque(maxlen=8)   # 같은 발화 안에서의 중복 방지
+
+    # ── 내부 도구 ──
+    @staticmethod
+    def _common_len(a, b):
+        n = 0
+        for x, y in zip(a, b):
+            if x != y:
+                break
+            n += 1
+        return n
+
+    @classmethod
+    def _agreed(cls, prev, cur):
+        """직전 결과와 현재 결과가 일치하는 앞부분을 단어 경계까지 잘라 돌려준다.
+        마지막 단어는 아직 바뀔 수 있으므로 떼어낸다."""
+        n = cls._common_len(prev, cur)
+        if n == 0:
+            return ""
+        if n < len(cur):
+            cut = cur.rfind(" ", 0, n)
+            return cur[:cut] if cut > 0 else ""
+        return cur[:n]
+
+    @staticmethod
+    def _last_sentence_end(t):
+        """마지막 문장부호 바로 다음 위치. 완성된 문장이 없으면 0."""
+        for i in range(len(t) - 1, -1, -1):
+            if t[i] in _SENT_END_CHARS:
+                return i + 1
+        return 0
+
+    @staticmethod
+    def force_cut(t):
+        """쉼표류가 뒤쪽에 있으면 거기서, 없으면 마지막 띄어쓰기에서 끊는다."""
+        for mark in (",", ";", ":", "、", "，"):
+            i = t.rfind(mark)
+            if i >= len(t) * 0.4:
+                return t[:i + 1]
+        i = t.rfind(" ")
+        if i >= len(t) * 0.5:
+            return t[:i]
+        return t   # 끊을 자리가 없으면 통째로
+
+    @staticmethod
+    def _worth_translating(s):
+        # 글자가 하나도 없는 조각(마침표만, 공백만)은 번역에 보내지 않는다.
+        # 보내면 Claude가 "번역할 내용이 없습니다" 같은 문장을 자막으로 내보낸다.
+        return len(s) >= 2 and re.search(r"\w", s) is not None
+
+    def _split_new(self, raw):
+        out = []
+        for p in split_sentences(raw):
+            s = p.strip()
+            if s and s not in self.recent and self._worth_translating(s):
+                self.recent.append(s)
+                out.append(s)
+        return out
+
+    def _take(self, transcript, cut, now):
+        """transcript에서 앞으로 cut글자를 확정해 문장 단위로 돌려준다."""
+        raw = transcript[self.sent_len:self.sent_len + cut]
+        self.emitted += raw
+        self.sent_len += cut
+        self.last_sent_at = now
+        return self._split_new(raw)
+
+    # ── 바깥에서 부르는 것 ──
+    def on_interim(self, transcript, now):
+        # LocalAgreement의 값어치는 중간 결과가 얼마나 자주 오느냐에 달려 있다.
+        #   V1(latest_long) : 0.25초마다 → 한 번 더 기다려도 손해가 없다
+        #   chirp_3         : 6초마다    → 두 번 기다리면 12초 지연이 된다
+        # 드물게 오는 엔진에서는 이번 결과를 그대로 믿는다. 드물게 온다는 것은
+        # 인식기가 이미 한 번 정리해서 보냈다는 뜻이다.
+        slow = (now - self.prev_at) >= self.SLOW_INTERIM_SEC
+        confirmed = transcript if slow else self._agreed(self.prev, transcript)
+        self.prev = transcript
+        self.prev_at = now
+        # 2) 두 번 연속 일치한 부분에 완성된 문장이 있으면 그것부터 내보낸다
+        if len(confirmed) > self.sent_len:
+            cut = self._last_sentence_end(confirmed[self.sent_len:])
+            if cut:
+                return self._take(transcript, cut, now)
+        # 3) 안전망 — 오래 안 나갔으면 확정 여부와 상관없이 끊어 보낸다.
+        #    (스페인어처럼 마침표가 안 붙고 인식 결과도 계속 흔들리는 경우)
+        if (now - self.last_sent_at >= self.FORCE_SEC
+                and len(transcript) > self.sent_len):
+            pending = transcript[self.sent_len:]
+            if len(pending.strip()) >= self.FORCE_MIN_CHARS:
+                chunk = self.force_cut(pending)
+                if chunk.strip():
+                    return self._take(transcript, len(chunk), now)
+        return []
+
+    def on_speech_end(self, now):
+        """1) 구글이 '말이 멈췄다'고 알림 → 남은 것을 전부 내보낸다."""
+        if len(self.prev) <= self.sent_len:
+            return []
+        return self._take(self.prev, len(self.prev) - self.sent_len, now)
+
+    def on_final(self, transcript, now):
+        # 인식기는 발화가 끝날 때 앞부분 표현을 통째로 고쳐 쓰기도 한다.
+        # 갈라지는 지점까지 되돌리되 REWIND_MAX 글자까지만 되돌린다.
+        # 많이 어긋났는데 그대로 되돌리면, 이미 나갔던 자막 서너 문장이
+        # 20초쯤 뒤에 통째로 다시 나온다(실제로 겪음). 조금 빠뜨리는 편이 낫다.
+        start = self.sent_len
+        if not transcript.startswith(self.emitted):
+            n = self._common_len(self.emitted, transcript)
+            if self.sent_len - n <= self.REWIND_MAX:
+                start = n
+        out = self._split_new(transcript[start:]) if len(transcript) > start else []
+        self.sent_len = 0
+        self.prev = ""
+        self.prev_at = now
+        self.emitted = ""
+        self.last_sent_at = now
+        self.recent.clear()
+        return out
+
+
+# ===== 음성인식 엔진 =====
+# 두 엔진 모두 아래 형태의 이벤트만 내보낸다. 바깥(audio_socket)은 어느 엔진인지
+# 몰라도 된다.
+#   ("stream_start", "")  새 인식 스트림 시작 — 문장 끊기를 새로 시작하라
+#   ("speech_end",   "")  말이 멈췄다
+#   ("interim",   본문)   아직 말하는 중
+#   ("final",     본문)   한 발화가 끝났다
+#   ("error",     메시지) 인식 오류
+
+
+def _google_project_id():
+    """구글 프로젝트 ID를 찾는다 (V2 API에 필요).
+    인증 파일은 두 종류다.
+      - 서비스 계정 JSON        → project_id
+      - gcloud 사용자 인증(ADC) → quota_project_id
+    둘 다 없으면 google.auth가 아는 기본 프로젝트를 쓴다."""
+    for key in ("GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_QUOTA_PROJECT"):
+        if os.environ.get(key):
+            return os.environ[key]
+    path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        pid = d.get("project_id") or d.get("quota_project_id")
+        if pid:
+            return pid
+    except Exception:
+        pass
+    try:
+        import google.auth
+        return google.auth.default()[1] or ""
+    except Exception:
+        return ""
+
+
+# 원고에서 힌트를 뽑을 때 떼어낼 조사. 긴 것부터 검사한다.
+_HINT_JOSA = ("으로써", "으로서", "이라는", "이라고", "에서는", "에게서", "께서는",
+              "라는", "라고", "에서", "에게", "으로", "까지", "부터", "보다", "마다",
+              "조차", "처럼", "한테", "께서", "이나", "이란", "라도", "이여",
+              "은", "는", "이", "가", "을", "를", "의", "에", "도", "와", "과",
+              "로", "만", "야", "여", "께", "요")
+
+# 흔해서 힌트로 값어치가 없는 말. 실제 예배 로그 27회분에서 가장 많이 나온
+# 어절들을 보고, 고유명사·교회 용어가 아닌 것만 골라냈다.
+_HINT_STOP = set("""
+우리 저희 여러분 사람 사람들 이것 그것 저것 여기 거기 저기 지금 오늘 내일 어제
+그때 자기 자신 서로 모두 무엇 누구 어디 언제 얼마 다시 그래서 그러나 그리고
+하지만 그러면 그런데 그러니까 왜냐하면 이렇게 그렇게 저렇게 어떻게 이런 그런
+저런 어떤 무슨 정말 진짜 아주 가장 매우 너무 조금 많이 함께 같이 물론 사실
+이제 인제 먼저 나중 다음 모든 여러 많은 좋은 나쁜 같은 다른 새로운 이번 지난
+온갖 때문 위해 통해 대해 관해 의해 따라 대신 만큼 정도 동안 사이 경우 방법
+것들 부분 전체 자리 순간 한번 그것들 저것들
+""".split())
+
+# 용언 활용형 — 명사가 아니므로 힌트에 넣지 않는다.
+_HINT_VERBISH = re.compile(
+    r"(니다|세요|십시오|하는|하던|했던|하고|해서|하여|하지|하면|하며|해도|해야|"
+    r"되는|되고|되어|되면|있는|있고|있어|없는|없고|없이|같은|같이|보면|보고|"
+    r"보는|주는|주고|받는|받고|까요|나요|지요|네요|군요|거든|든지|"
+    r"한다|된다|이다|있다|없다|였다)$")
+
+
+def _hint_stem(word):
+    """어절에서 조사를 떼어낸다. 한 글자만 남으면 부르는 쪽에서 버린다."""
+    for josa in _HINT_JOSA:
+        if word.endswith(josa):
+            return word[:-len(josa)]
+    return word
+
+
+def _sermon_hint_terms(text, limit=300):
+    """설교 원고에서 인식 힌트로 줄 말을 고른다.
+
+    예전에는 빈도 상위 300 '어절'을 그대로 줬다. 그러면 실제로 뽑히는 것이
+    '하는·있습니다·어떻게·이렇게'처럼 흔한 말이라 boost를 줘도 값어치가 없고,
+    정작 필요한 고유명사는 원고에 한두 번만 나와서 상위에 들지 못했다.
+    그래서 조사를 떼고 흔한 말과 용언을 걸러 명사만 남긴다.
+
+    주의: '이사야→이사'처럼 조사와 같은 글자로 끝나는 고유명사는 잘못
+    잘릴 수 있다. 성경 인명·지명은 glossary.txt에 따로 들어 있어
+    그쪽 경로로 온전히 전달된다."""
+    from collections import Counter
+    cnt = Counter()
+    for word in re.findall(r"[가-힣]{2,}", text):
+        stem = _hint_stem(word)
+        if len(stem) < 2 or stem in _HINT_STOP or _HINT_VERBISH.search(stem):
+            continue
+        cnt[stem] += 1
+    return [w for w, _ in cnt.most_common(limit)]
+
+
+def _stt_hint_phrases(src_code):
+    """인식 힌트로 줄 단어들. 용어집·설교 원고는 한국어 목록이므로
+    원어가 한국어일 때만 쓴다 (다른 언어에 주면 정확도가 오히려 나빠진다)."""
+    if not src_code.startswith("ko"):
+        return []
+    out = list(glossary_terms)
+    if sermon_context:
+        out += _sermon_hint_terms(sermon_context)
+    return out
+
+
+def _stt_events_v1(src_code, audio_q, stop_flag):
+    """지금까지 쓰던 엔진 — Speech-to-Text V1, latest_long + enhanced."""
+    from google.cloud import speech
+
+    phrases = _stt_hint_phrases(src_code)
+    speech_contexts = []
+    if phrases:
+        speech_contexts.append(speech.SpeechContext(phrases=phrases[:4000], boost=20.0))
+
+    client = speech.SpeechClient()
+    recog_config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=16000,
+        language_code=src_code,
+        enable_automatic_punctuation=True,
+        model="latest_long",        # 긴 발화에 적합한 모델
+        use_enhanced=True,          # 고품질(enhanced) 모델 사용
+        speech_contexts=speech_contexts,
+    )
+    streaming_config = speech.StreamingRecognitionConfig(
+        config=recog_config,
+        interim_results=True,
+        # 말이 멈추면 SPEECH_ACTIVITY_END 이벤트가 온다 → 그 자리에서 문장을 끊는다.
+        # (voice_activity_timeout은 켜지 않는다. 그건 침묵이 길면 스트림을 닫아버려
+        #  찬양·기도 중에 인식이 끊긴다.)
+        enable_voice_activity_events=True,
+    )
+    END = speech.StreamingRecognizeResponse.SpeechEventType.SPEECH_ACTIVITY_END
+
+    def request_gen():
+        while not stop_flag["stop"]:
+            chunk = audio_q.get()
+            if chunk is None:
+                return
+            yield speech.StreamingRecognizeRequest(audio_content=chunk)
+
+    # 구글 스트림은 약 5분 제한 → 끝나면 다시 연결 (음성 큐는 유지)
+    while not stop_flag["stop"]:
+        try:
+            yield ("stream_start", "")
+            for response in client.streaming_recognize(streaming_config, request_gen()):
+                if response.speech_event_type == END:
+                    yield ("speech_end", "")
+                # 한 응답에 results[0]=지금까지의 전체 문장(안정도 0.9),
+                # results[1]=아직 흔들리는 뒷조각(0.01)이 함께 온다. [0]만 쓴다.
+                if response.results:
+                    r = response.results[0]
+                    tr = r.alternatives[0].transcript
+                    if tr.strip():
+                        yield ("final" if r.is_final else "interim", tr)
+        except Exception as e:
+            yield ("error", str(e)[:120])
+            if stop_flag["stop"]:
+                break
+
+
+def _stt_events_chirp3(src_code, audio_q, stop_flag):
+    """새 엔진 — Speech-to-Text V2의 chirp_3.
+    V1보다 좋은 점: 인식 정확도, 내장 잡음제거(반주·잔향), 그리고 custom_prompt로
+    오늘 설교의 고유명사를 인식 단계에서 직접 알려줄 수 있다."""
+    from google.api_core.client_options import ClientOptions
+    from google.cloud.speech_v2 import SpeechClient
+    from google.cloud.speech_v2.types import cloud_speech as t
+
+    project = _google_project_id()
+    if not project:
+        yield ("error", "chirp3: 서비스 계정 JSON에서 프로젝트 ID를 못 읽었습니다")
+        return
+
+    # chirp_3는 us / eu 멀티리전에서 제공된다. 리전 전용 엔드포인트로 붙어야 한다.
+    location = "us"
+    client = SpeechClient(client_options=ClientOptions(
+        api_endpoint="%s-speech.googleapis.com" % location))
+    recognizer = "projects/%s/locations/%s/recognizers/_" % (project, location)
+
+    features = t.RecognitionFeatures(enable_automatic_punctuation=True)
+    # 오늘 설교 원고가 있으면 '무엇에 대한 설교인지'를 인식기에 직접 알려준다.
+    if sermon_context:
+        head = sermon_context[:1200].replace("\n", " ")
+        features.custom_prompt_config = t.CustomPromptConfig(
+            custom_prompt=("This is a live Christian sermon. Transcribe faithfully with "
+                           "punctuation. Today's sermon covers: " + head))
+
+    config = t.RecognitionConfig(
+        explicit_decoding_config=t.ExplicitDecodingConfig(
+            encoding=t.ExplicitDecodingConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=16000, audio_channel_count=1),
+        language_codes=[src_code],
+        model="chirp_3",
+        features=features,
+        # 본당 반주·잔향을 줄인다. (사람 목소리는 못 지운다)
+        denoiser_config=t.DenoiserConfig(denoise_audio=True),
+    )
+    phrases = _stt_hint_phrases(src_code)[:1000]   # chirp_3는 1,000개 제한
+    if phrases:
+        config.adaptation = t.SpeechAdaptation(phrase_sets=[
+            t.SpeechAdaptation.AdaptationPhraseSet(
+                inline_phrase_set=t.PhraseSet(
+                    phrases=[t.PhraseSet.Phrase(value=p, boost=20.0) for p in phrases]))])
+
+    streaming_config = t.StreamingRecognitionConfig(
+        config=config,
+        streaming_features=t.StreamingRecognitionFeatures(
+            interim_results=True, enable_voice_activity_events=True),
+    )
+    END = t.StreamingRecognizeResponse.SpeechEventType.SPEECH_ACTIVITY_END
+
+    def request_gen():
+        # V2는 첫 요청에 리코그나이저와 설정을 함께 보낸다
+        yield t.StreamingRecognizeRequest(
+            recognizer=recognizer, streaming_config=streaming_config)
+        while not stop_flag["stop"]:
+            chunk = audio_q.get()
+            if chunk is None:
+                return
+            yield t.StreamingRecognizeRequest(audio=chunk)
+
+    while not stop_flag["stop"]:
+        try:
+            yield ("stream_start", "")
+            for response in client.streaming_recognize(requests=request_gen()):
+                if response.speech_event_type == END:
+                    yield ("speech_end", "")
+                if response.results:
+                    r = response.results[0]
+                    if not r.alternatives:
+                        continue
+                    tr = r.alternatives[0].transcript
+                    if tr.strip():
+                        yield ("final" if r.is_final else "interim", tr)
+        except Exception as e:
+            yield ("error", "chirp3: " + str(e)[:110])
+            if stop_flag["stop"]:
+                break
+
+
 @sock.route("/audio")
 def audio_socket(ws):
     """브라우저에서 16kHz PCM 오디오를 받아 Google Speech로 스트리밍 인식 → 번역."""
-    from google.cloud import speech
-
     # 첫 메시지: 설정(JSON)
     cfg_raw = ws.receive()
     cfg = json.loads(cfg_raw)
@@ -707,46 +1194,32 @@ def audio_socket(ws):
     source_name = STT_TO_NAME.get(cfg.get("source_lang_code"), "Korean")
     target_lang = cfg.get("target_lang", "English")
 
-    # 인식 힌트(speech adaptation)
-    speech_contexts = []
-    # 1) 교회 용어집 — 모든 항목을 높은 가중치로(고유명사 사전)
-    if glossary_terms:
-        speech_contexts.append(speech.SpeechContext(phrases=glossary_terms[:4000], boost=20.0))
-    # 2) 오늘 설교 원고에서 자주 나오는 단어 — 보조 힌트
-    if sermon_context:
-        import re as _re2
-        from collections import Counter
-        words = _re2.findall(r"[가-힣]{2,}", sermon_context)
-        common = [w for w, _ in Counter(words).most_common(300)]
-        if common:
-            speech_contexts.append(speech.SpeechContext(phrases=common, boost=12.0))
-
-    speech_client = speech.SpeechClient()
-    recog_config = speech.RecognitionConfig(
-        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=16000,
-        language_code=src_code,
-        enable_automatic_punctuation=True,
-        model="latest_long",        # 긴 발화에 적합한 최신 모델
-        use_enhanced=True,          # 고품질(enhanced) 모델 사용
-        speech_contexts=speech_contexts,
-    )
-    streaming_config = speech.StreamingRecognitionConfig(
-        config=recog_config, interim_results=True
-    )
-
     audio_q = queue.Queue()
     stop_flag = {"stop": False}
 
     # 브라우저 → 오디오 수신 스레드
     def receiver():
+        import time as _t
+        last = _t.time()
         try:
             while True:
                 data = ws.receive()
                 if data is None:
                     break
                 if isinstance(data, (bytes, bytearray)):
+                    now = _t.time()
+                    # 브라우저에서 음성이 끊겼는가 (한 조각 ≈ 0.085초 간격이 정상)
+                    if now - last >= 1.0:
+                        _log_diag("audio_gap",
+                                  "브라우저에서 음성이 %.1f초 동안 오지 않았습니다" % (now - last))
+                    last = now
                     audio_q.put(bytes(data))
+                    # 인식이 못 따라가서 음성이 쌓이는가
+                    n = audio_q.qsize()
+                    if n >= 60:
+                        _log_diag("audio_backlog",
+                                  "음성 처리가 밀리고 있습니다 — 대기 %d조각(약 %.0f초분)"
+                                  % (n, n * 0.085))
         except Exception:
             pass
         finally:
@@ -756,14 +1229,6 @@ def audio_socket(ws):
     recv_thread = threading.Thread(target=receiver, daemon=True)
     recv_thread.start()
 
-    def request_gen():
-        # Google 스트림은 약 5분 제한 → 호출부에서 재시작
-        while not stop_flag["stop"]:
-            chunk = audio_q.get()
-            if chunk is None:
-                return
-            yield speech.StreamingRecognizeRequest(audio_content=chunk)
-
     # 이 연결의 세션 ID (마이크를 끄면 무효화되어 대기 중 번역이 폐기됨)
     global _current_session
     with _session_lock:
@@ -771,48 +1236,33 @@ def audio_socket(ws):
         my_session = _current_session
     reset_context()   # 새 마이크 세션: 이전 발화 문맥 초기화
 
-    import re as _re
+    import time as _time
 
-    def split_sentences(t):
-        # 문장부호(. ? ! 。 ？ ！ …) 뒤에서 자른다. 부호를 포함해 반환.
-        parts = _re.split(r'(?<=[\.\?\!。？！…])\s*', t)
-        return [p for p in parts if p.strip()]
+    engine = settings.get("stt_engine", "v1")
+    events = (_stt_events_chirp3 if engine == "chirp3" else _stt_events_v1)(
+        src_code, audio_q, stop_flag)
+    operator_queue.put(("stt_engine", engine))
 
-    translated = []  # 현재 발화에서 이미 번역에 보낸 문장(텍스트로 중복 제거)
-
-    # 5분 제한 대응: 스트림이 끝나면 다시 연결 (음성 큐는 유지)
-    while not stop_flag["stop"]:
-        try:
-            responses = speech_client.streaming_recognize(streaming_config, request_gen())
-            for response in responses:
-                for result in response.results:
-                    transcript = result.alternatives[0].transcript
-                    if not transcript.strip():
-                        continue
-                    pieces = split_sentences(transcript)
-
-                    if result.is_final:
-                        operator_queue.put(("input", transcript.strip()))
-                        # 아직 안 보낸 문장(끝 미완성 조각 포함)을 모두 번역
-                        for p in pieces:
-                            n = p.strip()
-                            if n and n not in translated:
-                                enqueue_translation(n, source_name, my_session)
-                        translated = []  # 다음 발화 위해 초기화
-                    else:
-                        operator_queue.put(("interim", transcript.strip()))
-                        # 마침표로 '완성된' 문장만 즉시 번역 (마지막 미완성 조각 제외)
-                        if len(pieces) >= 2:
-                            complete = pieces[:-1]
-                            for p in complete:
-                                n = p.strip()
-                                if n and n not in translated:
-                                    translated.append(n)
-                                    enqueue_translation(n, source_name, my_session)
-        except Exception as e:
-            operator_queue.put(("stt_error", str(e)[:120]))
-            if stop_flag["stop"]:
-                break
+    seg = Segmenter(_time.time())
+    for kind, text in events:
+        now = _time.time()
+        if kind == "stream_start":
+            # 스트림마다 새로 만든다. 글자 위치(sent_len)가 그 스트림 기준이라
+            # 스트림이 바뀌면 이어 쓸 수 없다.
+            seg = Segmenter(now)
+        elif kind == "speech_end":
+            for s in seg.on_speech_end(now):
+                enqueue_translation(s, source_name, my_session)
+        elif kind == "final":
+            operator_queue.put(("input", text.strip()))
+            for s in seg.on_final(text, now):
+                enqueue_translation(s, source_name, my_session)
+        elif kind == "interim":
+            operator_queue.put(("interim", text.strip()))
+            for s in seg.on_interim(text, now):
+                enqueue_translation(s, source_name, my_session)
+        elif kind == "error":
+            operator_queue.put(("stt_error", text))
 
     # 마이크 종료: 이 세션을 무효화해 대기 중인 번역 작업을 폐기
     with _session_lock:
@@ -840,6 +1290,32 @@ def translate():
     return jsonify({"status": "started"})
 
 
+def _sermon_archive_dir():
+    return os.path.join(APP_DIR, "설교원고")
+
+
+def _save_sermon_script(filename, text):
+    """올린 설교 원고를 파일로 남긴다.
+
+    예전에는 sermon_context 변수에만 담아서 프로그램을 끄면 사라졌다.
+    쌓아 두면 나중에 고유명사를 뽑아 용어집을 키우는 데 쓸 수 있다.
+    저장에 실패해도 업로드 자체는 성공시킨다 (예배 중에 막히면 안 된다)."""
+    if not text or not text.strip():
+        return
+    try:
+        import datetime
+        folder = _sermon_archive_dir()
+        os.makedirs(folder, exist_ok=True)
+        stem = os.path.splitext(os.path.basename(filename or "설교"))[0]
+        stem = re.sub(r'[\/:*?"<>|]', "_", stem)[:60]
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
+        with open(os.path.join(folder, stamp + "_" + stem + ".txt"),
+                  "w", encoding="utf-8") as f:
+            f.write(text)
+    except Exception as e:
+        print("설교 원고 저장 실패:", e)
+
+
 @app.route("/upload", methods=["POST"])
 def upload():
     global sermon_context
@@ -865,6 +1341,7 @@ def upload():
         else:
             return jsonify({"error": "지원 형식: .txt, .pdf, .docx"}), 400
 
+        _save_sermon_script(file.filename, sermon_context)
         preview = sermon_context[:200].replace("\n", " ")
         return jsonify({"status": "ok", "chars": len(sermon_context), "preview": preview})
 

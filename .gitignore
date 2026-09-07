@@ -9,6 +9,7 @@ google-key.json
 ngrok-domain.txt
 tunnel.log
 설교/
+설교원고/
 
 # PyInstaller 빌드 산출물
 배포빌드/build/
@@ -25,3 +26,7 @@ __pycache__/
 # 기타
 *.tmp
 Thumbs.db
+
+# 이 저장소와 무관한 별개 프로젝트 (설교 mp3 등 4GB)
+오디오편집기/
+mystocks-study/
