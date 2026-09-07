@@ -453,7 +453,10 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
     # 비용은 모든 언어를 합산하고, 로그 줄은 대표 언어에만 남긴다
     warn, total = _track_cost(usage)
     if warn:
+        # print는 창 없는 .exe에서 사라진다. 예배 중에 바로 보이도록
+        # 운영자 화면으로 보낸다. (로그.txt에도 남는다)
         print(warn)
+        operator_queue.put(("cost_warn", warn))
     if is_primary:
         last_output = out
         _log_translation(text, out, usage, warn, total)
