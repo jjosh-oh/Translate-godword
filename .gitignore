@@ -1,5 +1,6 @@
 # API 키 / 인증 파일 (절대 올리지 않음)
 .env
+zippw.txt
 google-key.json
 *.json
 
