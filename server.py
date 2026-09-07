@@ -251,6 +251,30 @@ def _track_cost(u):
     return warn, total
 
 
+_diag_last = {}
+_diag_lock = threading.Lock()
+
+
+def _log_diag(key, msg, min_gap=10.0):
+    """자막 멈춤의 원인을 가리기 위한 진단 기록.
+
+    실제 예배에서만 일어나는 현상이라 로그로 남겨야 알 수 있다.
+    같은 종류는 min_gap 초에 한 번만 남긴다 (로그가 넘치지 않게).
+    기록만 하고 동작은 바꾸지 않는다."""
+    import time as _t
+    now = _t.time()
+    with _diag_lock:
+        if now - _diag_last.get(key, 0) < min_gap:
+            return
+        _diag_last[key] = now
+    try:
+        import datetime
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "로그.txt"), "a", encoding="utf-8") as f:
+            f.write("[%s] 진단: %s\n" % (datetime.datetime.now().strftime("%H:%M:%S"), msg))
+    except Exception:
+        pass
+
+
 def _log_translation(src, out, usage=None, warn=None, total=0.0):
     try:
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "로그.txt")
@@ -1070,13 +1094,27 @@ def audio_socket(ws):
 
     # 브라우저 → 오디오 수신 스레드
     def receiver():
+        import time as _t
+        last = _t.time()
         try:
             while True:
                 data = ws.receive()
                 if data is None:
                     break
                 if isinstance(data, (bytes, bytearray)):
+                    now = _t.time()
+                    # 브라우저에서 음성이 끊겼는가 (한 조각 ≈ 0.085초 간격이 정상)
+                    if now - last >= 1.0:
+                        _log_diag("audio_gap",
+                                  "브라우저에서 음성이 %.1f초 동안 오지 않았습니다" % (now - last))
+                    last = now
                     audio_q.put(bytes(data))
+                    # 인식이 못 따라가서 음성이 쌓이는가
+                    n = audio_q.qsize()
+                    if n >= 60:
+                        _log_diag("audio_backlog",
+                                  "음성 처리가 밀리고 있습니다 — 대기 %d조각(약 %.0f초분)"
+                                  % (n, n * 0.085))
         except Exception:
             pass
         finally:
