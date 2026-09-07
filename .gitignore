@@ -9,6 +9,7 @@ google-key.json
 ngrok-domain.txt
 tunnel.log
 설교/
+설교원고/
 
 # PyInstaller 빌드 산출물
 배포빌드/build/

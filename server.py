@@ -849,6 +849,62 @@ def _google_project_id():
         return ""
 
 
+# 원고에서 힌트를 뽑을 때 떼어낼 조사. 긴 것부터 검사한다.
+_HINT_JOSA = ("으로써", "으로서", "이라는", "이라고", "에서는", "에게서", "께서는",
+              "라는", "라고", "에서", "에게", "으로", "까지", "부터", "보다", "마다",
+              "조차", "처럼", "한테", "께서", "이나", "이란", "라도", "이여",
+              "은", "는", "이", "가", "을", "를", "의", "에", "도", "와", "과",
+              "로", "만", "야", "여", "께", "요")
+
+# 흔해서 힌트로 값어치가 없는 말. 실제 예배 로그 27회분에서 가장 많이 나온
+# 어절들을 보고, 고유명사·교회 용어가 아닌 것만 골라냈다.
+_HINT_STOP = set("""
+우리 저희 여러분 사람 사람들 이것 그것 저것 여기 거기 저기 지금 오늘 내일 어제
+그때 자기 자신 서로 모두 무엇 누구 어디 언제 얼마 다시 그래서 그러나 그리고
+하지만 그러면 그런데 그러니까 왜냐하면 이렇게 그렇게 저렇게 어떻게 이런 그런
+저런 어떤 무슨 정말 진짜 아주 가장 매우 너무 조금 많이 함께 같이 물론 사실
+이제 인제 먼저 나중 다음 모든 여러 많은 좋은 나쁜 같은 다른 새로운 이번 지난
+온갖 때문 위해 통해 대해 관해 의해 따라 대신 만큼 정도 동안 사이 경우 방법
+것들 부분 전체 자리 순간 한번 그것들 저것들
+""".split())
+
+# 용언 활용형 — 명사가 아니므로 힌트에 넣지 않는다.
+_HINT_VERBISH = re.compile(
+    r"(니다|세요|십시오|하는|하던|했던|하고|해서|하여|하지|하면|하며|해도|해야|"
+    r"되는|되고|되어|되면|있는|있고|있어|없는|없고|없이|같은|같이|보면|보고|"
+    r"보는|주는|주고|받는|받고|까요|나요|지요|네요|군요|거든|든지|"
+    r"한다|된다|이다|있다|없다|였다)$")
+
+
+def _hint_stem(word):
+    """어절에서 조사를 떼어낸다. 한 글자만 남으면 부르는 쪽에서 버린다."""
+    for josa in _HINT_JOSA:
+        if word.endswith(josa):
+            return word[:-len(josa)]
+    return word
+
+
+def _sermon_hint_terms(text, limit=300):
+    """설교 원고에서 인식 힌트로 줄 말을 고른다.
+
+    예전에는 빈도 상위 300 '어절'을 그대로 줬다. 그러면 실제로 뽑히는 것이
+    '하는·있습니다·어떻게·이렇게'처럼 흔한 말이라 boost를 줘도 값어치가 없고,
+    정작 필요한 고유명사는 원고에 한두 번만 나와서 상위에 들지 못했다.
+    그래서 조사를 떼고 흔한 말과 용언을 걸러 명사만 남긴다.
+
+    주의: '이사야→이사'처럼 조사와 같은 글자로 끝나는 고유명사는 잘못
+    잘릴 수 있다. 성경 인명·지명은 glossary.txt에 따로 들어 있어
+    그쪽 경로로 온전히 전달된다."""
+    from collections import Counter
+    cnt = Counter()
+    for word in re.findall(r"[가-힣]{2,}", text):
+        stem = _hint_stem(word)
+        if len(stem) < 2 or stem in _HINT_STOP or _HINT_VERBISH.search(stem):
+            continue
+        cnt[stem] += 1
+    return [w for w, _ in cnt.most_common(limit)]
+
+
 def _stt_hint_phrases(src_code):
     """인식 힌트로 줄 단어들. 용어집·설교 원고는 한국어 목록이므로
     원어가 한국어일 때만 쓴다 (다른 언어에 주면 정확도가 오히려 나빠진다)."""
@@ -856,9 +912,7 @@ def _stt_hint_phrases(src_code):
         return []
     out = list(glossary_terms)
     if sermon_context:
-        from collections import Counter
-        words = re.findall(r"[가-힣]{2,}", sermon_context)
-        out += [w for w, _ in Counter(words).most_common(300)]
+        out += _sermon_hint_terms(sermon_context)
     return out
 
 
@@ -1090,6 +1144,32 @@ def translate():
     return jsonify({"status": "started"})
 
 
+def _sermon_archive_dir():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "설교원고")
+
+
+def _save_sermon_script(filename, text):
+    """올린 설교 원고를 파일로 남긴다.
+
+    예전에는 sermon_context 변수에만 담아서 프로그램을 끄면 사라졌다.
+    쌓아 두면 나중에 고유명사를 뽑아 용어집을 키우는 데 쓸 수 있다.
+    저장에 실패해도 업로드 자체는 성공시킨다 (예배 중에 막히면 안 된다)."""
+    if not text or not text.strip():
+        return
+    try:
+        import datetime
+        folder = _sermon_archive_dir()
+        os.makedirs(folder, exist_ok=True)
+        stem = os.path.splitext(os.path.basename(filename or "설교"))[0]
+        stem = re.sub(r'[\/:*?"<>|]', "_", stem)[:60]
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
+        with open(os.path.join(folder, stamp + "_" + stem + ".txt"),
+                  "w", encoding="utf-8") as f:
+            f.write(text)
+    except Exception as e:
+        print("설교 원고 저장 실패:", e)
+
+
 @app.route("/upload", methods=["POST"])
 def upload():
     global sermon_context
@@ -1115,6 +1195,7 @@ def upload():
         else:
             return jsonify({"error": "지원 형식: .txt, .pdf, .docx"}), 400
 
+        _save_sermon_script(file.filename, sermon_context)
         preview = sermon_context[:200].replace("\n", " ")
         return jsonify({"status": "ok", "chars": len(sermon_context), "preview": preview})
 
