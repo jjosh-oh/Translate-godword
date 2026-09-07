@@ -14,6 +14,12 @@ tmp_ret = collect_all('google_cloud_speech')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('google_cloud_texttospeech')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+# Gemini 3.5 Transcribe Live — Live API는 websockets로 붙는다. 둘 다 없으면
+# 개발에서는 되고 설치본에서만 엔진이 안 뜬다.
+tmp_ret = collect_all('google_genai')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('websockets')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(

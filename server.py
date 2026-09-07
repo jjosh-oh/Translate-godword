@@ -158,7 +158,8 @@ settings = {
     "target_lang": "English",
     "source_lang": "Korean",
     "voice": False,   # 번역 음성(TTS) 사용 여부 (운영자 토글, 기본 꺼짐)
-    # 음성인식 엔진: "v1" = 지금까지 쓰던 latest_long, "chirp3" = 새 모델(V2)
+    # 음성인식 엔진: "v1" = 지금까지 쓰던 latest_long, "chirp3" = V2 모델,
+    # "gemini_live" = Gemini 3.5 Transcribe Live (GEMINI_API_KEY 필요)
     # 기본값은 v1. 운영자 화면에서 바꿔 같은 설교로 비교할 수 있다.
     "stt_engine": "v1",
 }
@@ -1079,6 +1080,130 @@ def _stt_events_chirp3(src_code, audio_q, stop_flag):
                 break
 
 
+async def _gemini_live_loop(audio_q, stop_flag, out_q, api_key):
+    """Gemini Live 세션을 유지하며 (kind, text)를 out_q로 넘긴다.
+
+    Live API는 asyncio 전용이고 이 프로그램의 나머지는 스레드+큐 구조다.
+    그래서 오디오를 넘겨주는 스레드 하나(feeder)와 이 코루틴이 만나는 지점에
+    asyncio 큐를 둔다. feeder는 재연결과 무관하게 하나만 돌아야 한다 —
+    둘이 되면 같은 audio_q를 두 스레드가 나눠 먹어 음성이 새 세션에 안 간다.
+    """
+    import asyncio
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=api_key)
+    aq = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def feeder():
+        while not stop_flag["stop"]:
+            chunk = audio_q.get()
+            loop.call_soon_threadsafe(aq.put_nowait, chunk)
+            if chunk is None:
+                return
+
+    threading.Thread(target=feeder, daemon=True).start()
+
+    config = types.LiveConnectConfig(
+        response_modalities=["TEXT"],
+        input_audio_transcription=types.AudioTranscriptionConfig(),
+    )
+
+    while not stop_flag["stop"]:
+        try:
+            async with client.aio.live.connect(
+                    model="gemini-3.5-transcribe-live", config=config) as session:
+                out_q.put(("stream_start", ""))
+
+                async def sender():
+                    while not stop_flag["stop"]:
+                        chunk = await aq.get()
+                        if chunk is None:
+                            break
+                        await session.send_realtime_input(
+                            audio=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000"))
+                    await session.send_realtime_input(audio_stream_end=True)
+
+                async def receiver():
+                    prev_text = ""
+                    async for response in session.receive():
+                        # 말이 멈췄다는 신호. V1의 SPEECH_ACTIVITY_END와 같은 자리다.
+                        # 이게 없으면 남은 자막이 시간 강제 끊기까지 기다려서
+                        # 문장 사이가 10초까지 벌어진다(실측).
+                        va = getattr(response, "voice_activity", None)
+                        if va and va.voice_activity_type == types.VoiceActivityType.ACTIVITY_END:
+                            out_q.put(("speech_end", ""))
+                        vs = getattr(response, "voice_activity_detection_signal", None)
+                        if vs and vs.vad_signal_type == types.VadSignalType.VAD_SIGNAL_TYPE_EOS:
+                            out_q.put(("speech_end", ""))
+                        sc = response.server_content
+                        if not sc:
+                            continue
+                        # interim이 실시간용이다. 문서의 기본 예제에는 이 필드가
+                        # 없어서, 안 읽으면 2분에 4번밖에 안 온다.
+                        # 이 글은 한 턴 동안 계속 누적된다. 누적이 끊기면(새 턴)
+                        # 글자 위치가 어긋나므로 문장 끊기를 새로 시작해야 한다.
+                        interim = getattr(sc, "interim_input_transcription", None)
+                        if interim and interim.text:
+                            text = interim.text
+                            if prev_text and not text.startswith(prev_text[:20]):
+                                # 끊기 전에 남은 것을 먼저 내보낸다. 안 그러면
+                                # 턴이 바뀔 때마다 아직 안 나간 자막이 버려진다.
+                                out_q.put(("speech_end", ""))
+                                out_q.put(("stream_start", ""))
+                            prev_text = text
+                            out_q.put(("interim", text))
+                        # input_transcription(최종)은 쓰지 않는다. V1의 is_final과
+                        # 달리 발화 단위가 아니라 그 턴 전체를 다시 보내주는 것이어서,
+                        # final로 넘기면 이미 나간 자막 여러 줄이 통째로 다시 나온다.
+
+                send_task = asyncio.create_task(sender())
+                recv_task = asyncio.create_task(receiver())
+                _, pending = await asyncio.wait(
+                    {send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+        except Exception as e:
+            out_q.put(("error", "gemini_live: " + str(e)[:110]))
+            if not stop_flag["stop"]:
+                await asyncio.sleep(1.0)
+    out_q.put(None)
+
+
+def _stt_events_gemini_live(src_code, audio_q, stop_flag):
+    """Gemini 3.5 Transcribe Live (Gemini Live API).
+
+    2026-09-07 실측(8/30 1부 설교 2분): 자막 243회·평균 0.53초·첫 자막 1.31초로
+    V1(164회·0.7초)보다 빈도가 높고 chirp_3(26회·4.7초)보다 훨씬 빠르다.
+    단, 찬양(노래) 구간에서는 VAD가 발화로 인식하지 않아 자막이 하나도 나오지
+    않는다. 찬양 시간에는 통역하지 않으므로 그대로 둔다.
+
+    말이 멈췄다는 별도 신호(speech_end)는 이 API에 없다. 대신 발화가 끝나면
+    input_transcription이 오므로 그것을 final로 넘긴다 — Segmenter는 final에서
+    남은 것을 전부 내보내므로 결과가 같다.
+    """
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        yield ("error", "gemini_live: GEMINI_API_KEY가 없습니다 (.env에 넣어야 합니다)")
+        return
+
+    import asyncio
+
+    out_q = queue.Queue()
+
+    def runner():
+        asyncio.run(_gemini_live_loop(audio_q, stop_flag, out_q, api_key))
+
+    threading.Thread(target=runner, daemon=True).start()
+
+    while True:
+        item = out_q.get()
+        if item is None:
+            return
+        yield item
+
+
 @sock.route("/audio")
 def audio_socket(ws):
     """브라우저에서 16kHz PCM 오디오를 받아 Google Speech로 스트리밍 인식 → 번역."""
@@ -1134,8 +1259,9 @@ def audio_socket(ws):
     import time as _time
 
     engine = settings.get("stt_engine", "v1")
-    events = (_stt_events_chirp3 if engine == "chirp3" else _stt_events_v1)(
-        src_code, audio_q, stop_flag)
+    events = {"chirp3": _stt_events_chirp3,
+              "gemini_live": _stt_events_gemini_live}.get(
+        engine, _stt_events_v1)(src_code, audio_q, stop_flag)
     operator_queue.put(("stt_engine", engine))
 
     seg = Segmenter(_time.time())

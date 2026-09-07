@@ -18,6 +18,8 @@
       --accent-strong: #0e8e80;
       --accent-soft: rgba(22,186,169,0.12);
       --danger: #ff5c5c;
+      --live: #22c55e;
+      --warn: #f59e0b;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; }
@@ -89,6 +91,17 @@
       border-radius: 12px;
       padding: 15px 16px;
     }
+
+    /* 상태 띠 — 지금 잘 돌아가는 것만 초록. 문제가 생기면 그 카드만 색이 바뀐다.
+       색을 장식이 아니라 신호로 쓰는 것이라, 예배 중에 어디가 막혔는지
+       글자를 읽지 않고도 알 수 있다. 폭은 항상 3px이라 색이 바뀌어도 안 흔들린다. */
+    .card {
+      border-left: 3px solid transparent;
+      transition: border-left-color 0.25s, box-shadow 0.25s;
+    }
+    .card.live { border-left-color: var(--live); box-shadow: inset 3px 0 14px -8px var(--live); }
+    .card.warn { border-left-color: var(--warn); }
+    .card.down { border-left-color: var(--danger); }
 
     .card-title {
       font-size: 10px;
@@ -341,7 +354,7 @@
     </div>
 
     <!-- 실시간 미리보기 -->
-    <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:340px;">
+    <div class="card" id="card-preview" style="flex:1; display:flex; flex-direction:column; min-height:340px;">
       <div class="card-title" style="flex-shrink:0;">실시간 미리보기</div>
       <div class="preview-grid">
         <div class="preview-box">
@@ -390,12 +403,13 @@
         <select id="stt-engine" onchange="onSttEngineChange()">
           <option value="v1">기본 (latest_long)</option>
           <option value="chirp3">Chirp 3 (새 모델)</option>
+          <option value="gemini_live">Gemini 3.5 Live (찬양 인식 안 됨)</option>
         </select>
       </div>
     </div>
 
     <!-- 송출 제어 -->
-    <div class="card">
+    <div class="card" id="card-broadcast">
       <div class="card-title">송출 제어</div>
       <div class="controls-row">
         <button class="btn btn-start" id="start-btn" onclick="startBroadcast()">▶ 송출 창 열기</button>
@@ -411,7 +425,7 @@
     </div>
 
     <!-- 셀폰 접속 -->
-    <div class="card">
+    <div class="card" id="card-phone">
       <div class="card-title">셀폰 접속 (QR)</div>
       <input type="hidden" id="tunnel-url">
       <div style="display:flex; gap:12px; align-items:center;">
@@ -523,6 +537,22 @@
   });
 
   let isListening = false;
+
+  // ── 카드 왼쪽 상태 띠 ──
+  function setCardState(id, state) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove("live", "warn", "down");
+    if (state) el.classList.add(state);
+  }
+
+  // 마이크는 켜져 있는데 자막이 20초 넘게 없으면 미리보기 카드가 주황으로 바뀐다.
+  let lastSubtitleAt = 0;
+  setInterval(function () {
+    if (!isListening) { setCardState("card-preview", null); return; }
+    const quiet = (Date.now() - lastSubtitleAt) / 1000;
+    setCardState("card-preview", (lastSubtitleAt && quiet < 20) ? "live" : "warn");
+  }, 2000);
   let inputLines = [];   // 완성된 인식 문장 누적
   let outputLines = [];  // 완성된 번역 문장 누적
 
@@ -557,6 +587,7 @@
 
   // 번역 미리보기: 완성 번역들 누적 + 맨 아래 현재 번역(스트리밍)
   function renderOutputPreview(streaming) {
+    lastSubtitleAt = Date.now();
     const op = document.getElementById("output-preview");
     op.innerHTML = "";
     outputLines.forEach(function (t) {
@@ -872,6 +903,7 @@
         makeQR();
       } else {
         document.getElementById("tunnel-url").placeholder = "주소를 찾지 못했습니다 (터널 실행 확인)";
+        setCardState("card-phone", "warn");
       }
     } catch (e) {}
   }
@@ -890,6 +922,7 @@
     qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(mobileUrl);
     document.getElementById("qr-link").textContent = mobileUrl;
     document.getElementById("qr-area").style.display = "block";
+    setCardState("card-phone", "live");
   }
 
   // 페이지 로드 시 자동으로 주소 불러오기 시도
@@ -1047,6 +1080,7 @@
         document.getElementById("mic-btn").textContent = "⏹ 마이크 중지";
         document.getElementById("mic-btn").style.background = "#7a2d2d";
         isListening = true;
+        setCardState("card-broadcast", "live");
       }
       audioRetries = 0;
       hideAudioWarn();
@@ -1124,6 +1158,8 @@
     audioWS = null;
     document.getElementById("mic-btn").textContent = "🎤 마이크 시작";
     document.getElementById("mic-btn").style.background = "";
+    setCardState("card-broadcast", null);
+    setCardState("card-preview", null);
   }
 
   function onSourceLangChange() {
