@@ -294,7 +294,50 @@ def load_glossary():
 load_glossary()
 
 # 번역 대응표 (한글=English 형식)
+#   translation_mapping — 항상 쓰는 고정 대응표 (mapping.txt)
+#   weekly_mapping      — 그날 설교에만 쓰는 임시 대응표 (mapping_주간.txt)
+# 교회는 같은 말씀으로 주일에 두 번 예배한다. 1부에서 잘못 나간 곳을 검토해
+# 임시 대응표에 넣고 2부에 쓰고, 그 주가 끝나면 비운다. 이렇게 하면 대응표가
+# 해마다 쌓여 문장마다 프롬프트에 실리는 문제(500개면 예배당 $23)가 없다.
 translation_mapping = {}
+weekly_mapping = {}
+
+WEEKLY_MAPPING_FILE = "mapping_주간.txt"
+
+
+def effective_mapping():
+    """번역에 실제로 쓰는 대응표. 그날 것이 고정보다 우선한다."""
+    merged = dict(translation_mapping)
+    merged.update(weekly_mapping)
+    return merged
+
+
+def _weekly_path():
+    return os.path.join(APP_DIR, WEEKLY_MAPPING_FILE)
+
+
+def load_weekly_mapping():
+    global weekly_mapping
+    out = {}
+    try:
+        path = _weekly_path()
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and line:
+                        k, v = line.split("=", 1)
+                        out[k.strip()] = v.strip()
+    except Exception:
+        out = {}
+    weekly_mapping = out
+
+
+def _save_weekly_mapping():
+    with open(_weekly_path(), "w", encoding="utf-8") as f:
+        for k, v in weekly_mapping.items():
+            f.write("%s=%s\n" % (k, v))
+
 
 def load_mapping():
     global translation_mapping
@@ -311,6 +354,7 @@ def load_mapping():
         translation_mapping = {}
 
 load_mapping()
+load_weekly_mapping()
 
 
 # ===== 번역 비용 추적 =====
@@ -412,8 +456,9 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
 
     # 번역 대응표가 있으면 프롬프트에 추가
     mapping_text = ""
-    if translation_mapping:
-        pairs = "\n".join(f"  {k} → {v}" for k, v in translation_mapping.items())
+    _mapping = effective_mapping()
+    if _mapping:
+        pairs = "\n".join(f"  {k} → {v}" for k, v in _mapping.items())
         mapping_text = (
             "\n\nName/term translation table (use these EXACT translations when the term appears):\n"
             + pairs
@@ -1547,8 +1592,10 @@ def _save_mapping():
 
 def _mapping_payload():
     items = [{"k": k, "v": v} for k, v in translation_mapping.items()]
+    weekly = [{"k": k, "v": v} for k, v in weekly_mapping.items()]
     preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
-    return {"status": "ok", "count": len(items), "preview": preview, "items": items}
+    return {"status": "ok", "count": len(items), "preview": preview,
+            "items": items, "weekly": weekly, "weekly_count": len(weekly)}
 
 
 @app.route("/upload-mapping", methods=["POST"])
@@ -1596,6 +1643,38 @@ def remove_mapping():
     if k in translation_mapping:
         del translation_mapping[k]
         _save_mapping()
+    return jsonify(_mapping_payload())
+
+
+@app.route("/add-weekly-mapping", methods=["POST"])
+def add_weekly_mapping():
+    """그날 설교용 임시 대응표에 추가. 예배 후 검토에서 고른 것이 여기로 들어온다."""
+    data = request.get_json(force=True)
+    k = (data.get("korean") or "").strip()
+    v = (data.get("english") or "").strip()
+    if not k or not v:
+        return jsonify({"error": "단어와 번역을 모두 입력하세요."}), 400
+    weekly_mapping[k] = v
+    _save_weekly_mapping()
+    return jsonify(_mapping_payload())
+
+
+@app.route("/remove-weekly-mapping", methods=["POST"])
+def remove_weekly_mapping():
+    """그날 대응표에서 한 항목만 뺀다."""
+    data = request.get_json(force=True)
+    k = (data.get("korean") or "").strip()
+    if k in weekly_mapping:
+        del weekly_mapping[k]
+        _save_weekly_mapping()
+    return jsonify(_mapping_payload())
+
+
+@app.route("/clear-weekly-mapping", methods=["POST"])
+def clear_weekly_mapping():
+    """그날 것을 전부 비운다. 고정 대응표(mapping.txt)는 건드리지 않는다."""
+    weekly_mapping.clear()
+    _save_weekly_mapping()
     return jsonify(_mapping_payload())
 
 
