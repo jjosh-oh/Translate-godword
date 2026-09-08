@@ -160,8 +160,9 @@ settings = {
     "voice": False,   # 번역 음성(TTS) 사용 여부 (운영자 토글, 기본 꺼짐)
     # 음성인식 엔진: "v1" = 지금까지 쓰던 latest_long, "chirp3" = V2 모델,
     # "gemini_live" = Gemini 3.5 Transcribe Live (GEMINI_API_KEY 필요)
-    # 기본값은 v1. 운영자 화면에서 바꿔 같은 설교로 비교할 수 있다.
-    "stt_engine": "v1",
+    # 기본값은 gemini_live. 운영자 화면에서 바꿔 같은 설교로 비교할 수 있다.
+    # GEMINI_API_KEY가 없는 PC에서는 아래 audio_socket이 v1으로 되돌린다.
+    "stt_engine": "gemini_live",
 }
 
 # 번역 언어 이름 → Google TTS 언어 코드
@@ -1258,7 +1259,13 @@ def audio_socket(ws):
 
     import time as _time
 
-    engine = settings.get("stt_engine", "v1")
+    engine = settings.get("stt_engine", "gemini_live")
+    # 키가 없으면 자막이 아예 안 나온다. 예배 중에 그러면 대안이 없으므로
+    # 조용히 실패하지 않고 기본 엔진으로 돌아가고, 운영자 화면에 알린다.
+    if engine == "gemini_live" and not os.environ.get("GEMINI_API_KEY", "").strip():
+        engine = "v1"
+        operator_queue.put(("cost_warn",
+                            "GEMINI_API_KEY가 없어 기본 엔진(latest_long)으로 시작했습니다"))
     events = {"chirp3": _stt_events_chirp3,
               "gemini_live": _stt_events_gemini_live}.get(
         engine, _stt_events_v1)(src_code, audio_q, stop_flag)
