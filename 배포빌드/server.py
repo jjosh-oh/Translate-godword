@@ -1335,7 +1335,15 @@ async def _gemini_live_loop(src_code, audio_q, stop_flag, out_q, api_key):
                         interim = getattr(sc, "interim_input_transcription", None)
                         if interim and interim.text:
                             text = interim.text
-                            if prev_text and not text.startswith(prev_text[:20]):
+                            # 새 턴인지는 '누적 길이가 확 줄었는지'로 본다.
+                            # 앞 20자 비교로 했더니 인식기가 앞부분을 고쳐 쓸 때마다
+                            # (마침표가 사라지거나 '이'가 붙거나 '기독교인이란→
+                            # 기독교인이라면') 같은 턴을 새 턴으로 오인해서,
+                            # 글자 위치가 0으로 초기화되어 이미 나간 첫 소절이
+                            # 다시 나갔다. 실측(2분): 오인 3회.
+                            # 실측 여유가 크다 — 진짜 턴 교체는 149자→1자, 65자→6자
+                            # (1~9%)이고, 앞부분 수정은 119자→118자(99%)였다.
+                            if prev_text and len(text) < len(prev_text) * 0.5:
                                 # 끊기 전에 남은 것을 먼저 내보낸다. 안 그러면
                                 # 턴이 바뀔 때마다 아직 안 나간 자막이 버려진다.
                                 out_q.put(("speech_end", ""))
