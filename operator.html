@@ -278,6 +278,8 @@
   <div class="brand-mark">⛪</div>
   <h1>LiveWord<span class="sub">운영자 대시보드</span></h1>
   <span id="status-badge" class="badge disconnected">연결 중...</span>
+  <button class="btn btn-gray" id="lang-toggle" onclick="toggleUiLang()"
+          style="font-size:11px; padding:4px 10px; margin-left:8px;">🌐 English</button>
   <span class="hint">출력 화면 / OBS 브라우저 소스 주소: <strong>http://localhost:5000</strong></span>
 </header>
 
@@ -420,23 +422,23 @@
       <div class="lang-row">
         <select id="source-lang-display" onchange="onSourceLangChange()">
           <option value="ko-KR">한국어</option>
-          <option value="en-US">English</option>
-          <option value="ja-JP">日本語</option>
-          <option value="zh-CN">中文</option>
-          <option value="es-ES">Español</option>
-          <option value="fr-FR">Français</option>
-          <option value="de-DE">Deutsch</option>
+          <option value="en-US">영어 (English)</option>
+          <option value="ja-JP">일본어 (日本語)</option>
+          <option value="zh-CN">중국어 (中文)</option>
+          <option value="es-ES">스페인어 (Español)</option>
+          <option value="fr-FR">프랑스어 (Français)</option>
+          <option value="de-DE">독일어 (Deutsch)</option>
         </select>
         <span>→</span>
         <select id="target-lang-display" onchange="applySettings()">
-          <option value="English">영어</option>
+          <option value="English">영어 (English)</option>
           <option value="Korean">한국어</option>
-          <option value="Japanese">일본어</option>
-          <option value="Chinese">중국어</option>
-          <option value="Spanish">스페인어</option>
-          <option value="French">프랑스어</option>
-          <option value="German">독일어</option>
-          <option value="Arabic">아랍어</option>
+          <option value="Japanese">일본어 (日本語)</option>
+          <option value="Chinese">중국어 (中文)</option>
+          <option value="Spanish">스페인어 (Español)</option>
+          <option value="French">프랑스어 (Français)</option>
+          <option value="German">독일어 (Deutsch)</option>
+          <option value="Arabic">아랍어 (العربية)</option>
         </select>
       </div>
       <div class="lang-row" style="margin-top:10px; font-size:12px; color:var(--text-2)">
@@ -655,11 +657,11 @@
   // 운영자 스트림 연결
   const opStream = new EventSource("/operator-stream");
   opStream.onopen = () => {
-    document.getElementById("status-badge").textContent = "연결됨";
+    document.getElementById("status-badge").textContent = T("연결됨");
     document.getElementById("status-badge").className = "badge connected";
   };
   opStream.onerror = () => {
-    document.getElementById("status-badge").textContent = "연결 끊김";
+    document.getElementById("status-badge").textContent = T("연결 끊김");
     document.getElementById("status-badge").className = "badge disconnected";
   };
   opStream.onmessage = (e) => {
@@ -833,12 +835,14 @@
       st.textContent = "✓ 대응어 " + data.count + "개 등록됨";
       st.style.color = "#4caf50";
     } else {
-      st.textContent = "아직 등록된 단어가 없습니다";
+      st.textContent = T("아직 등록된 단어가 없습니다");
       st.style.color = "#666";
     }
     const box = document.getElementById("mapping-list");
     const toggle = document.getElementById("mapping-toggle");
-    toggle.textContent = box.hidden ? ("목록 보기 (" + data.count + ")") : "목록 숨기기";
+    toggle.textContent = box.hidden
+      ? (T("목록 보기") + " (" + data.count + ")")
+      : T("목록 숨기기");
     toggle.hidden = data.count === 0;
     box.innerHTML = "";
     (data.items || []).forEach(function (it) {
@@ -851,18 +855,18 @@
       const isFix = /[가-힣]/.test(it.v);
       txt.innerHTML = esc(it.k) + ' <span style="color:var(--text-3)">→</span> ' + esc(it.v)
         + ' <span style="color:' + (isFix ? "var(--warn)" : "var(--text-3)") + '; font-size:10px;">'
-        + (isFix ? "인식 교정" : "번역 지정") + '</span>';
+        + (isFix ? T("인식 교정") : T("번역 지정")) + '</span>';
       row.appendChild(txt);
       const edit = document.createElement("button");
       edit.className = "btn btn-gray";
       edit.style.cssText = "font-size:11px; padding:3px 8px; flex-shrink:0;";
-      edit.textContent = "수정";
+      edit.textContent = T("수정");
       edit.onclick = function () { startEditMapping(it.k, it.v); };
       row.appendChild(edit);
       const del = document.createElement("button");
       del.className = "btn btn-gray";
       del.style.cssText = "font-size:11px; padding:3px 8px; flex-shrink:0; color:#ff7a7a;";
-      del.textContent = "삭제";
+      del.textContent = T("삭제");
       del.onclick = function () {
         if (confirm('"' + it.k + " → " + it.v + '" 를 지웁니다.')) removeMapping(it.k);
       };
@@ -885,13 +889,13 @@
     editingKey = k;
     document.getElementById("map-ko").value = k;
     document.getElementById("map-en").value = v;
-    document.getElementById("map-add-btn").textContent = "수정 저장";
+    document.getElementById("map-add-btn").textContent = T("수정 저장");
     document.getElementById("map-ko").focus();
   }
 
   function endEditMapping() {
     editingKey = null;
-    document.getElementById("map-add-btn").textContent = "추가";
+    document.getElementById("map-add-btn").textContent = T("추가");
   }
 
   async function loadMappingInfo() {
@@ -932,7 +936,7 @@
     const list = document.getElementById("review-list");
     const count = parseInt(document.getElementById("review-count").value, 10);
     btn.disabled = true;
-    status.textContent = "검토 중... (문장 수에 따라 30초~2분)";
+    status.textContent = T("검토 중... (문장 수에 따라 30초~2분)");
     list.innerHTML = "";
     try {
       const res = await fetch("/review-log", {
@@ -949,7 +953,7 @@
       d.findings.forEach(function (f, i) { list.appendChild(reviewRow(f, i)); });
       document.getElementById("review-clear-btn").hidden = false;
     } catch (e) {
-      status.textContent = "검토 실패";
+      status.textContent = T("검토 실패");
     } finally {
       btn.disabled = false;
     }
@@ -986,7 +990,7 @@
       const b = document.createElement("button");
       b.className = "btn btn-gray";
       b.style.cssText = "font-size:11px; padding:4px 9px;";
-      b.textContent = "이번 주 대응표에 넣기";
+      b.textContent = T("이번 주 대응표에 넣기");
       b.onclick = async function () {
         b.disabled = true;
         try {
@@ -997,7 +1001,7 @@
           const data = await res.json();
           if (data.error) { alert(data.error); b.disabled = false; return; }
           renderMapping(data);
-          b.textContent = "✓ 넣었습니다";
+          b.textContent = T("✓ 넣었습니다");
         } catch (e) { alert("추가 실패"); b.disabled = false; }
       };
       foot.appendChild(b);
@@ -1005,8 +1009,8 @@
       const note = document.createElement("span");
       note.style.cssText = "color:var(--warn); font-size:11px;";
       note.textContent = f.verified
-        ? "문장이 길어 대응표에는 넣지 않습니다 — 눈으로만 확인하세요"
-        : "근거를 확인하지 못했습니다 — 직접 들어보고 판단하세요";
+        ? T("문장이 길어 대응표에는 넣지 않습니다 — 눈으로만 확인하세요")
+        : T("근거를 확인하지 못했습니다 — 직접 들어보고 판단하세요");
       foot.appendChild(note);
     }
     box.appendChild(foot);
@@ -1053,7 +1057,7 @@
   }
 
   async function clearWeeklyMapping() {
-    if (!confirm("이번 주 것을 모두 비웁니다. 고정 대응표는 그대로 남습니다.")) return;
+    if (!confirm(T("이번 주 것을 모두 비웁니다. 고정 대응표는 그대로 남습니다."))) return;
     try {
       const res = await fetch("/clear-weekly-mapping", { method: "POST" });
       renderMapping(await res.json());
@@ -1407,6 +1411,168 @@
       setTimeout(() => startMic(), 400);
     }
   }
+
+  // ── 화면 언어 전환 (한국어 ↔ English) ──
+  // 문구가 70곳이 넘어 한 곳씩 고치지 않고 사전으로 바꿔치운다.
+  // 원래 한국어는 각 노드에 담아 두므로 되돌릴 때 정확히 복원된다.
+  // 살아 있는 자료(미리보기·대응표·검토 결과·QR 주소)는 건드리지 않는다 —
+  // 설교 내용이 사전에 걸려 바뀌면 안 된다.
+  const I18N = {
+  "운영자 대시보드": "Operator Dashboard",
+  "연결 중...": "Connecting…",
+  "출력 화면 / OBS 브라우저 소스 주소:": "Display / OBS browser source URL:",
+  "🎉 새 버전이 있습니다": "🎉 A new version is available",
+  "다운로드 →": "Download →",
+  "오디오 입력 소스": "AUDIO INPUT",
+  "마이크를 선택하세요...": "Select a microphone…",
+  "🔄 새로고침": "🔄 Refresh",
+  "입력 레벨": "Input level",
+  "대기 중": "Idle",
+  "설교 자료 업로드 (선택)": "SERMON SCRIPT UPLOAD (OPTIONAL)",
+  "📄 파일 선택": "📄 Choose file",
+  "업로드된 자료 없음": "No file uploaded",
+  "✕ 삭제": "✕ Remove",
+  "교회 용어집 — 이름·지명 (인식 정확도↑)": "CHURCH GLOSSARY — NAMES & PLACES",
+  "📄 용어집 올리기": "📄 Upload glossary",
+  "불러오는 중...": "Loading…",
+  "번역 대응표 — 이름·단어 번역 지정": "NAME / TERM MAP",
+  "번역 지정": "Fixed translation",
+  "— 예) 요한 → John &nbsp;·&nbsp;": "— e.g. 요한 → John &nbsp;·&nbsp;",
+  "인식 교정": "Recognition fix",
+  "— 예) 데모 → 대목 (한글로 쓰면 잘못 들린 낱말을 바로잡습니다)": "— e.g. 데모 → 대목 (a Korean value corrects a misheard word)",
+  "추가": "Add",
+  "목록 보기": "Show list",
+  "이번 주만 쓰는 것 ·": "For this week only ·",
+  "개": "",
+  "✕ 이번 주 것 비우기": "✕ Clear this week",
+  "📄 파일로 한번에 올리기": "📄 Upload from file",
+  "예배 후 검토 — 잘못 나간 곳 찾기": "POST-SERVICE REVIEW",
+  "예배가 끝난 뒤": "After the service",
+  "눌러주세요. 그날 기록을 훑어 음성인식이 잘못 알아들은 곳을 찾아줍니다.": ", press this. It scans the day's log for words the recognizer got wrong.",
+  "근거가 된 문장을 그대로 보여주니 반드시 확인하고": "The quoted evidence is shown — always check it before",
+  "넣으세요 — 성경은 앞뒤 절이 비슷해 헷갈릴 수 있습니다.": " adding. Adjacent Bible verses look alike and can be confused.",
+  "최근 150문장": "Last 150 sentences",
+  "최근 300문장": "Last 300 sentences",
+  "최근 600문장": "Last 600 sentences",
+  "🔍 검토하기": "🔍 Review",
+  "✕ 결과 지우기": "✕ Clear results",
+  "실시간 미리보기": "LIVE PREVIEW",
+  "인식 (입력)": "RECOGNIZED (INPUT)",
+  "번역 (출력)": "TRANSLATION (OUTPUT)",
+  "언어 설정": "LANGUAGES",
+  "음성인식": "Recognition",
+  "기본 (latest_long)": "Default (latest_long)",
+  "송출 제어": "BROADCAST",
+  "▶ 송출 창 열기": "▶ Open display",
+  "🎤 마이크 시작": "🎤 Start mic",
+  "⛶ 전체화면": "⛶ Fullscreen",
+  "🧹 화면 지우기": "🧹 Clear screen",
+  "■ 송출 종료": "■ Stop broadcast",
+  "🔊 번역 음성 켜기": "🔊 Spoken translation",
+  "— 교인이 이어폰으로 번역을 들을 수 있음 (사용량 만큼 추가 비용)": "— congregants can listen through earphones (extra cost per use)",
+  "셀폰 접속 (QR)": "PHONE ACCESS (QR)",
+  "교인들이 이 QR을 스캔하면 셀폰에서 자막을 봅니다": "Congregants scan this QR to see subtitles on their phones",
+  "🖨 교인용 안내문 (QR)": "🖨 Congregant handout (QR)",
+  "🖼 포스터 만들기 (로고 삽입)": "🖼 Make a poster (with logo)",
+  "화면 설정": "DISPLAY SETTINGS",
+  "폰트 크기": "Font size",
+  "글자색": "Text color",
+  "배경색": "Background",
+  "번역 출력 지연": "Output delay",
+  "한글 (예: 요한)": "Korean (e.g. 요한)",
+  "번역 (예: John)": "Translation (e.g. John)",
+  "누르면 큰 QR(교인용 안내문)이 열립니다": "Click to open a large QR (congregant handout)",
+  "연결됨": "Connected",
+  "연결 끊김": "Disconnected",
+  "입력 감지 중": "Detecting input",
+  "마이크 오류": "Mic error",
+  "검토 중... (문장 수에 따라 30초~2분)": "Reviewing… (30 s to 2 min)",
+  "검토 실패": "Review failed",
+  "잘못 나간 곳을 찾지 못했습니다.": "No problems found.",
+  "아직 등록된 단어가 없습니다": "No entries yet",
+  "목록 숨기기": "Hide list",
+  "수정": "Edit",
+  "삭제": "Delete",
+  "수정 저장": "Save changes",
+  "이번 주 대응표에 넣기": "Add to this week's map",
+  "✓ 넣었습니다": "✓ Added",
+  "추가 실패": "Could not add",
+  "저장 실패": "Could not save",
+  "비우기 실패": "Could not clear",
+  "문법·숫자 문제 — 대응표로는 해결되지 않습니다": "Grammar/number issue — a map entry won't fix this",
+  "문장이 길어 대응표에는 넣지 않습니다 — 눈으로만 확인하세요": "Too long for the map — just note it",
+  "근거를 확인하지 못했습니다 — 직접 들어보고 판단하세요": "Evidence not verified — listen and judge yourself",
+  "이번 주 것을 모두 비웁니다. 고정 대응표는 그대로 남습니다.": "This clears this week's entries. The fixed map stays."
+};
+  const I18N_SKIP = ["input-preview", "output-preview", "mapping-list",
+                     "mapping-weekly-list", "review-list", "qr-link",
+                     "viewer-breakdown", "glossary-preview", "upload-preview",
+                     "mapping-status", "review-status", "viewer-count"];
+  let uiLang = (function () {
+    try { return localStorage.getItem("liveword-ui-lang") || "ko"; } catch (e) { return "ko"; }
+  })();
+
+  function T(s) { return uiLang === "en" && I18N[s] ? I18N[s] : s; }
+
+  function i18nWalk(root, toEn) {
+    const skip = new Set(I18N_SKIP);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        for (let p = n.parentElement; p; p = p.parentElement) {
+          if (p.id && skip.has(p.id)) return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function (n) {
+      const raw = n.nodeValue;
+      const key = raw.trim();
+      if (!key) return;
+      if (toEn) {
+        if (I18N[key] !== undefined) {
+          if (n.__ko === undefined) n.__ko = raw;
+          n.nodeValue = raw.replace(key, I18N[key]);
+        }
+      } else if (n.__ko !== undefined) {
+        n.nodeValue = n.__ko;
+      }
+    });
+    // title·placeholder 도 같이
+    root.querySelectorAll("[title],[placeholder]").forEach(function (el) {
+      ["title", "placeholder"].forEach(function (attr) {
+        const cur = el.getAttribute(attr);
+        if (!cur) return;
+        const store = "__ko_" + attr;
+        if (toEn) {
+          if (I18N[cur] !== undefined) {
+            if (el[store] === undefined) el[store] = cur;
+            el.setAttribute(attr, I18N[cur]);
+          }
+        } else if (el[store] !== undefined) {
+          el.setAttribute(attr, el[store]);
+        }
+      });
+    });
+  }
+
+  function applyUiLang() {
+    i18nWalk(document.body, uiLang === "en");
+    const btn = document.getElementById("lang-toggle");
+    if (btn) btn.textContent = uiLang === "en" ? "🌐 한국어" : "🌐 English";
+    document.documentElement.lang = uiLang;
+  }
+
+  function toggleUiLang() {
+    uiLang = uiLang === "en" ? "ko" : "en";
+    try { localStorage.setItem("liveword-ui-lang", uiLang); } catch (e) {}
+    applyUiLang();
+    loadMappingInfo();          // 사전이 아니라 값으로 만드는 문구는 다시 그린다
+  }
+
+  applyUiLang();
+
 </script>
 
 </body>
