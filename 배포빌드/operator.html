@@ -370,8 +370,8 @@
     <div class="card" id="card-review">
       <div class="card-title">예배 후 검토 — 잘못 나간 곳 찾기</div>
       <div style="font-size:11px; color:#888; margin-bottom:8px;">
-        <strong>예배가 끝난 뒤</strong> 눌러주세요. 그날 기록을 훑어 음성인식이 잘못 알아들어
-        번역까지 틀어진 곳을 찾아줍니다. 대응표는 <strong>고른 것만</strong> 들어갑니다.
+        <strong>예배가 끝난 뒤</strong> 눌러주세요. 그날 기록을 훑어 음성인식이 잘못 알아들은 곳을 찾아줍니다.
+        <strong>근거가 된 문장을 그대로 보여주니 반드시 확인하고</strong> 넣으세요 — 성경은 앞뒤 절이 비슷해 헷갈릴 수 있습니다.
       </div>
       <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
         <select id="review-count" style="flex:0 0 auto; width:auto;">
@@ -908,14 +908,15 @@
     const head = document.createElement("div");
     head.innerHTML = '<span style="color:var(--danger)">' + esc(f.heard) + '</span>'
       + ' <span style="color:var(--text-3)">→</span> '
-      + '<span style="color:var(--live)">' + esc(f.meant) + '</span>'
-      + ' <span style="color:var(--text-3)">· ' + esc(f.english) + '</span>';
+      + '<span style="color:var(--live)">' + esc(f.meant) + '</span>';
     box.appendChild(head);
-    if (f.why) {
-      const why = document.createElement("div");
-      why.style.cssText = "color:var(--text-3); margin-top:3px; font-size:11px;";
-      why.textContent = f.why;
-      box.appendChild(why);
+    // 근거는 로그에 있던 문장을 그대로 보여준다. 사람이 직접 확인할 수 있어야 한다.
+    if (f.quote) {
+      const q = document.createElement("div");
+      q.style.cssText = "color:var(--text-2); margin-top:4px; font-size:11px;"
+        + "border-left:2px solid var(--border-strong); padding-left:7px;";
+      q.textContent = (f.line ? f.line + "번: " : "") + f.quote;
+      box.appendChild(q);
     }
     const foot = document.createElement("div");
     foot.style.cssText = "margin-top:7px;";
@@ -929,7 +930,7 @@
         try {
           const res = await fetch("/add-weekly-mapping", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ korean: f.heard, english: f.english })
+            body: JSON.stringify({ korean: f.heard, english: f.meant })
           });
           const data = await res.json();
           if (data.error) { alert(data.error); b.disabled = false; return; }
@@ -940,8 +941,10 @@
       foot.appendChild(b);
     } else {
       const note = document.createElement("span");
-      note.style.cssText = "color:var(--text-3); font-size:11px;";
-      note.textContent = "문법·숫자 문제 — 대응표로는 해결되지 않습니다";
+      note.style.cssText = "color:var(--warn); font-size:11px;";
+      note.textContent = f.verified
+        ? "문장이 길어 대응표에는 넣지 않습니다 — 눈으로만 확인하세요"
+        : "근거를 확인하지 못했습니다 — 직접 들어보고 판단하세요";
       foot.appendChild(note);
     }
     box.appendChild(foot);
