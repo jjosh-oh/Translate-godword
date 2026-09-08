@@ -353,6 +353,25 @@
       </div>
     </div>
 
+    <!-- 예배 후 검토 -->
+    <div class="card" id="card-review">
+      <div class="card-title">예배 후 검토 — 잘못 나간 곳 찾기</div>
+      <div style="font-size:11px; color:#888; margin-bottom:8px;">
+        <strong>예배가 끝난 뒤</strong> 눌러주세요. 그날 기록을 훑어 음성인식이 잘못 알아들어
+        번역까지 틀어진 곳을 찾아줍니다. 대응표는 <strong>고른 것만</strong> 들어갑니다.
+      </div>
+      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+        <select id="review-count" style="flex:0 0 auto; width:auto;">
+          <option value="150">최근 150문장</option>
+          <option value="300" selected>최근 300문장</option>
+          <option value="600">최근 600문장</option>
+        </select>
+        <button class="btn btn-start" id="review-btn" onclick="runReview()">🔍 검토하기</button>
+        <span id="review-status" style="font-size:12px; color:var(--text-3);"></span>
+      </div>
+      <div id="review-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
     <!-- 실시간 미리보기 -->
     <div class="card" id="card-preview" style="flex:1; display:flex; flex-direction:column; min-height:340px;">
       <div class="card-title" style="flex-shrink:0;">실시간 미리보기</div>
@@ -826,6 +845,90 @@
       renderMapping(data);
       ko.value = ""; en.value = ""; ko.focus();
     } catch (e) { alert("추가 실패"); }
+  }
+
+  // ── 예배 후 검토 ──
+  // 찾기만 한다. 대응표에 넣는 것은 사람이 버튼을 눌러 고른 것만.
+  async function runReview() {
+    const btn = document.getElementById("review-btn");
+    const status = document.getElementById("review-status");
+    const list = document.getElementById("review-list");
+    const count = parseInt(document.getElementById("review-count").value, 10);
+    btn.disabled = true;
+    status.textContent = "검토 중... (문장 수에 따라 30초~2분)";
+    list.innerHTML = "";
+    try {
+      const res = await fetch("/review-log", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: count })
+      });
+      const d = await res.json();
+      if (d.error) { status.textContent = d.error; return; }
+      status.textContent = `${d.reviewed}문장 검토 · 찾은 것 ${d.findings.length}건 · $${d.cost}`;
+      if (!d.findings.length) {
+        list.innerHTML = '<div style="font-size:12px; color:var(--text-3);">잘못 나간 곳을 찾지 못했습니다.</div>';
+        return;
+      }
+      d.findings.forEach(function (f, i) { list.appendChild(reviewRow(f, i)); });
+    } catch (e) {
+      status.textContent = "검토 실패";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function reviewRow(f, idx) {
+    const box = document.createElement("div");
+    box.style.cssText = "background:var(--card-2); border:1px solid var(--border);"
+      + "border-left:3px solid " + (f.fit ? "var(--live)" : "var(--warn)")
+      + "; border-radius:8px; padding:9px 11px; font-size:12px;";
+    const head = document.createElement("div");
+    head.innerHTML = '<span style="color:var(--danger)">' + esc(f.heard) + '</span>'
+      + ' <span style="color:var(--text-3)">→</span> '
+      + '<span style="color:var(--live)">' + esc(f.meant) + '</span>'
+      + ' <span style="color:var(--text-3)">· ' + esc(f.english) + '</span>';
+    box.appendChild(head);
+    if (f.why) {
+      const why = document.createElement("div");
+      why.style.cssText = "color:var(--text-3); margin-top:3px; font-size:11px;";
+      why.textContent = f.why;
+      box.appendChild(why);
+    }
+    const foot = document.createElement("div");
+    foot.style.cssText = "margin-top:7px;";
+    if (f.fit) {
+      const b = document.createElement("button");
+      b.className = "btn btn-gray";
+      b.style.cssText = "font-size:11px; padding:4px 9px;";
+      b.textContent = "대응표에 넣기";
+      b.onclick = async function () {
+        b.disabled = true;
+        try {
+          const res = await fetch("/add-mapping", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ korean: f.heard, english: f.english })
+          });
+          const data = await res.json();
+          if (data.error) { alert(data.error); b.disabled = false; return; }
+          renderMapping(data);
+          b.textContent = "✓ 넣었습니다";
+        } catch (e) { alert("추가 실패"); b.disabled = false; }
+      };
+      foot.appendChild(b);
+    } else {
+      const note = document.createElement("span");
+      note.style.cssText = "color:var(--text-3); font-size:11px;";
+      note.textContent = "문법·숫자 문제 — 대응표로는 해결되지 않습니다";
+      foot.appendChild(note);
+    }
+    box.appendChild(foot);
+    return box;
+  }
+
+  function esc(s) {
+    const d = document.createElement("div");
+    d.textContent = s == null ? "" : s;
+    return d.innerHTML;
   }
 
   async function removeMapping(k) {

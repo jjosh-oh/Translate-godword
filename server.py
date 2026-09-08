@@ -1492,6 +1492,123 @@ def mapping_info():
     return jsonify(_mapping_payload())
 
 
+# ===== 예배 후 검토 =====
+# 로그.txt의 (입력 → 번역) 기록을 훑어 '음성인식이 잘못 알아들어 번역까지 틀어진 곳'을
+# 찾는다. 찾기만 한다 — 대응표는 건드리지 않는다. 넣는 것은 운영자가 고른 것만이다.
+# 대응표는 이후 모든 번역에 강제로 적용되므로, 자동으로 쌓으면 잘못된 한 줄이
+# 그 뒤 모든 예배를 조용히 망가뜨린다.
+
+_REVIEW_BATCH = 150      # 한 번에 검토할 문장 수 (실측상 이 크기에서 근거를 잘 찾는다)
+_REVIEW_MAX = 1000
+
+
+_REVIEW_HEADERS = {"잘못 인식된 말", "원래 말", "영어로는", "표적합", "근거", "근거(짧게)"}
+
+
+def _parse_log_pairs(raw):
+    """로그.txt에서 (입력, 번역) 짝을 뽑는다."""
+    pairs, cur = [], None
+    for line in raw.splitlines():
+        m = re.match(r"\[\d\d:\d\d:\d\d\] 입력: (.*)", line)
+        if m:
+            cur = m.group(1).strip()
+            continue
+        m = re.match(r"\[\d\d:\d\d:\d\d\] 번역: (.*)", line)
+        if m and cur:
+            pairs.append((cur, m.group(1).strip()))
+            cur = None
+    return pairs
+
+
+_REVIEW_INSTRUCTION = (
+    "아래는 한국어 설교를 실시간 통역한 기록입니다. 각 항목은 음성인식 결과(인식)와 "
+    "그것을 영어로 옮긴 것(번역)입니다.\n\n"
+    "설교 맥락에서 **음성인식이 잘못 알아들어 번역까지 틀어진 곳**을 찾아주세요. "
+    "같은 구절이 다른 문장에서 제대로 인식된 것을 근거로 삼으면 좋습니다. "
+    "확신이 있는 것만 고르세요.\n\n"
+    "각 건을 이 형식으로 한 줄씩, 다른 설명 없이 쓰세요:\n"
+    "잘못 인식된 말 | 원래 말 | 영어로는 | 표적합 | 근거(짧게)\n\n"
+    "'표적합'은 이것이 **낱말·이름 단위의 고정 번역**으로 대응표에 넣을 만한 것이면 '예', "
+    "문법·조사·숫자 표기처럼 낱말 대응으로 해결되지 않는 것이면 '아니오'로 쓰세요.\n"
+    "찾은 것이 없으면 '없음'이라고만 쓰세요.\n\n"
+)
+
+
+def _review_batch(pairs):
+    """한 묶음을 검토해 (찾은 것 목록, usage)를 돌려준다."""
+    body = "\n".join("%d. 인식: %s\n   번역: %s" % (i + 1, k, v)
+                     for i, (k, v) in enumerate(pairs))
+    msg = client.messages.create(
+        model="claude-opus-4-8", max_tokens=2000,
+        messages=[{"role": "user", "content": _REVIEW_INSTRUCTION + body}])
+    text = msg.content[0].text if msg.content else ""
+    out = []
+    for line in text.splitlines():
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) < 4 or not parts[0] or parts[0].startswith("없음"):
+            continue
+        heard, meant, english = parts[0], parts[1], parts[2]
+        fit = parts[3].startswith("예") if len(parts) > 3 else False
+        why = parts[4] if len(parts) > 4 else ""
+        # 형식 안내 줄을 그대로 되돌려주는 경우가 있다 — 버린다
+        if heard in _REVIEW_HEADERS or meant in _REVIEW_HEADERS:
+            continue
+        # 번호만 적힌 첫 칸(예: "13")은 버린다 — 낱말이 아니면 대응표에 못 쓴다
+        if re.fullmatch(r"[\d\s.]+", heard):
+            continue
+        # 틀린 말과 원래 말이 같으면 고칠 것이 없다 (방향을 헷갈린 응답)
+        if heard == meant:
+            continue
+        # 문장을 통째로 대응표에 넣으면 안 된다. 낱말·짧은 구절만 '넣기 가능'으로.
+        if len(heard) > 20:
+            fit = False
+        out.append({"heard": heard, "meant": meant, "english": english,
+                    "fit": fit, "why": why})
+    return out, msg.usage
+
+
+@app.route("/review-log", methods=["POST"])
+def review_log():
+    """예배가 끝난 뒤 그날 기록을 검토한다. 대응표는 바뀌지 않는다."""
+    data = request.get_json(silent=True) or {}
+    try:
+        count = int(data.get("count") or 300)
+    except Exception:
+        count = 300
+    count = max(20, min(_REVIEW_MAX, count))
+
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "로그.txt"), "r",
+                  encoding="utf-8", errors="ignore") as f:
+            raw = f.read()
+    except Exception as e:
+        return jsonify(error="로그를 읽을 수 없습니다: %s" % str(e)[:80]), 500
+
+    pairs = [p for p in _parse_log_pairs(raw) if re.search(r"[가-힣]", p[0])][-count:]
+    if not pairs:
+        return jsonify(error="검토할 기록이 없습니다"), 400
+
+    findings, cost = [], 0.0
+    try:
+        for i in range(0, len(pairs), _REVIEW_BATCH):
+            got, usage = _review_batch(pairs[i:i + _REVIEW_BATCH])
+            findings += got
+            if usage is not None:
+                cost += _usage_cost(usage)
+    except Exception as e:
+        return jsonify(error="검토 중 오류: %s" % str(e)[:120]), 500
+
+    # 같은 낱말이 여러 번 잡히면 하나로 합친다
+    seen, merged = set(), []
+    for f in findings:
+        key = (f["heard"], f["meant"])
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(f)
+
+    return jsonify(findings=merged, reviewed=len(pairs), cost=round(cost, 3))
+
 @app.route("/viewer-count")
 def viewer_count():
     """폰으로 통역을 보고 있는 접속자 수(언어별 포함)."""
