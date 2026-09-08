@@ -312,6 +312,30 @@ def effective_mapping():
     return merged
 
 
+_HANGUL = re.compile(r"[가-힣]")
+
+
+def _apply_recognition_fixes(text):
+    """대응표 중 값이 '한글'인 항목은 인식 교정으로 쓴다.
+
+    예) 데모 → 대목   구글 지경 → 큰 구렁
+    들린 글자를 옳은 낱말로 바꿔 넣으면 번역은 문맥에 맞게 알아서 된다.
+    영어 번역을 강제로 지정하는 것보다 조사·어미가 자연스럽다.
+    (값이 영어인 항목은 지금까지처럼 프롬프트로 넘겨 번역을 고정한다)
+
+    긴 낱말부터 바꾼다 — 짧은 것이 먼저 걸리면 긴 항목이 영향을 받는다.
+    돌려주는 것: (바뀐 글, [(들린말, 옳은말), ...])
+    """
+    fixed, used = text, []
+    items = [(k, v) for k, v in effective_mapping().items()
+             if k and v and _HANGUL.search(v)]
+    for k, v in sorted(items, key=lambda kv: -len(kv[0])):
+        if k in fixed:
+            fixed = fixed.replace(k, v)
+            used.append((k, v))
+    return fixed, used
+
+
 def _weekly_path():
     return os.path.join(APP_DIR, WEEKLY_MAPPING_FILE)
 
@@ -421,13 +445,17 @@ def _log_diag(key, msg, min_gap=10.0):
         pass
 
 
-def _log_translation(src, out, usage=None, warn=None, total=0.0):
+def _log_translation(src, out, usage=None, warn=None, total=0.0, fixes=None):
     try:
         path = os.path.join(APP_DIR, "로그.txt")
         import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         with open(path, "a", encoding="utf-8") as f:
-            f.write(f"[{ts}] 입력: {src}\n[{ts}] 번역: {out}\n")
+            f.write(f"[{ts}] 입력: {src}\n")
+            if fixes:
+                f.write("[%s] 교정: %s\n" % (
+                    ts, ", ".join("%s→%s" % (k, v) for k, v in fixes)))
+            f.write(f"[{ts}] 번역: {out}\n")
             if usage is not None:
                 f.write("[%s] 토큰: 입력 %d · 캐시읽기 %d · 캐시기록 %d · 출력 %d"
                         " | 이번 $%.4f · 누적 $%.2f\n"
@@ -445,6 +473,8 @@ def _log_translation(src, out, usage=None, warn=None, total=0.0):
 
 def translate_and_stream(text: str, target_lang: str, source_lang: str, is_primary: bool = True, context: str = ""):
     global last_output
+    # 인식 교정(한글 → 한글)은 번역 전에 글자를 바꿔 넣는다
+    text, _fixes = _apply_recognition_fixes(text)
     base_instruction = (
         f"You are a professional church interpreter providing live subtitles. "
         f"Translate ONLY the exact given text from {source_lang} into {target_lang}. "
@@ -456,7 +486,8 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
 
     # 번역 대응표가 있으면 프롬프트에 추가
     mapping_text = ""
-    _mapping = effective_mapping()
+    # 값이 한글인 항목은 위에서 이미 글자를 바꿨으므로 프롬프트에 넣지 않는다
+    _mapping = {k: v for k, v in effective_mapping().items() if not _HANGUL.search(v)}
     if _mapping:
         pairs = "\n".join(f"  {k} → {v}" for k, v in _mapping.items())
         mapping_text = (
@@ -530,7 +561,7 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
         operator_queue.put(("cost_warn", warn))
     if is_primary:
         last_output = out
-        _log_translation(text, out, usage, warn, total)
+        _log_translation(text, out, usage, warn, total, _fixes)
         operator_queue.put(("done", ""))
 
     # 번역 음성(TTS): 운영자가 켰을 때만, 각 언어 셀폰(이어폰)으로 방송.
