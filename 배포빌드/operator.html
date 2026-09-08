@@ -469,9 +469,11 @@
       <div class="card-title">셀폰 접속 (QR)</div>
       <input type="hidden" id="tunnel-url">
       <div style="display:flex; gap:12px; align-items:center;">
-        <!-- QR에 담는 주소를 /m 으로 짧게 해서 칸 수를 줄였다(40→37). 누르면 큰 QR이 열린다 -->
+        <!-- QR에 담는 주소를 /m 으로 짧게 해서 칸 수를 줄였다(40→37). 누르면 큰 QR이 열린다.
+             image-rendering:pixelated 는 쓰지 않는다 — 화면 배율이 150%면 0.75배 축소가
+             일어나는데, 픽셀 그대로 방식은 칸을 불규칙하게 버려 QR을 망가뜨린다. -->
         <img id="qr-img" onclick="window.open('/guide','_blank')" title="누르면 큰 QR(교인용 안내문)이 열립니다"
-             style="width:88px; height:88px; background:#fff; border-radius:6px; padding:4px; flex-shrink:0; cursor:pointer; image-rendering:pixelated;">
+             style="width:88px; height:88px; background:#fff; border-radius:6px; padding:4px; flex-shrink:0; cursor:pointer;">
         <div style="min-width:0;">
           <div id="qr-link" style="font-size:11px; color:#7fe3d6; word-break:break-all;"></div>
           <div style="font-size:11px; color:#666; margin-top:4px;">교인들이 이 QR을 스캔하면 셀폰에서 자막을 봅니다</div>
@@ -1144,15 +1146,19 @@
     // QR에는 짧은 주소(/m)를 담는다 — 칸이 적어야 카메라가 잘 읽는다 (40칸 → 37칸)
     const mobileUrl = url + "/m";
     const qrImg = document.getElementById("qr-img");
-    // qzone(여백)이 없으면 스캔이 잘 안 된다.
-    // 화면 크기(88px)의 정확히 2배로 받는다 — 어중간하게 줄이면 칸 경계가 흐려진다.
+    // 화면 배율(devicePixelRatio)만큼 곱해서 받는다. 이 PC는 150%라 88px 자리가
+    // 실제로는 132픽셀이다. 그 크기로 정확히 받으면 브라우저가 늘리거나 줄이지
+    // 않으므로 칸 경계가 흐려지지 않는다. qzone(여백)은 스캔에 필요하다.
+    const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    const px = Math.round(88 * dpr);
     // 1순위: api.qrserver.com, 실패 시 quickchart.io로 대체
     qrImg.onerror = function () {
       qrImg.onerror = null;
-      qrImg.src = "https://quickchart.io/qr?size=176&margin=2&text=" + encodeURIComponent(mobileUrl);
+      qrImg.src = "https://quickchart.io/qr?size=" + px + "&margin=2&text="
+        + encodeURIComponent(mobileUrl);
     };
-    qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=176x176&qzone=2&data="
-      + encodeURIComponent(mobileUrl);
+    qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=" + px + "x" + px
+      + "&qzone=2&data=" + encodeURIComponent(mobileUrl);
     document.getElementById("qr-link").textContent = mobileUrl;
     document.getElementById("qr-area").style.display = "block";
     setCardState("card-phone", "live");
