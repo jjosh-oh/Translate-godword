@@ -115,9 +115,9 @@
 
 <div id="app">
   <div id="topbar">
-    <span><span id="conn-dot"></span><span id="conn-text">연결 중...</span></span>
+    <span><span id="conn-dot"></span><span id="conn-text" data-key="connecting">연결 중...</span></span>
     <span style="display:flex; align-items:center; gap:8px;">
-      <select id="lang-select" onchange="switchLang(this.value)" aria-label="언어 선택">
+      <select id="lang-select" onchange="switchLang(this.value)" aria-label="Language / 언어 선택">
         <option value="English">English</option>
         <option value="Korean">한국어</option>
         <option value="Japanese">日本語</option>
@@ -141,6 +141,30 @@
 </div>
 
 <script>
+  // ── 화면 문구 언어 ──
+  // 교인이 고른 자막 언어를 따라간다. 한국어를 고른 사람만 한국어로 보고,
+  // 나머지 언어를 고른 사람은 영어로 본다(한국어를 모르는 분들이므로).
+  const TXT = {
+    connecting:  ["연결 중...", "Connecting…"],
+    connected:   ["연결됨", "Connected"],
+    reconnecting:["재연결 중...", "Reconnecting…"],
+    empty:       ["통역이 시작되면<br>이곳에 자막이 표시됩니다.",
+                  "Subtitles will appear here<br>once interpretation starts."],
+    changed:     ["언어를 변경했습니다.<br>다음 문장부터 새 언어로 표시됩니다.",
+                  "Language changed.<br>The next sentence will use it."]
+  };
+  function uiIsEn() {
+    const sel = document.getElementById("lang-select");
+    return !sel || sel.value !== "Korean";
+  }
+  function t(key) { return TXT[key][uiIsEn() ? 1 : 0]; }
+  function refreshUiText() {
+    const ct = document.getElementById("conn-text");
+    if (ct && ct.dataset.key) ct.textContent = t(ct.dataset.key);
+    const em = document.getElementById("empty");
+    if (em) em.innerHTML = t("empty");
+  }
+
   const subtitles = document.getElementById("subtitles");
   const connDot = document.getElementById("conn-dot");
   const connText = document.getElementById("conn-text");
@@ -173,8 +197,9 @@
       if (sel) sel.value = s.target_lang;
       langInitialized = true;
     }
+    refreshUiText();      // 고른 언어에 맞춰 화면 문구를 맞춘다
     connect();
-  }).catch(() => connect());
+  }).catch(() => { refreshUiText(); connect(); });
 
   function render(streamingText) {
     const empty = document.getElementById("empty");
@@ -218,17 +243,20 @@
 
     sock.onopen = () => {
       connDot.classList.add("on");
-      connText.textContent = "연결됨";
+      connText.dataset.key = "connected";
+      connText.textContent = t("connected");
     };
     sock.onclose = () => {
       if (ws !== sock) return;      // 언어 전환으로 교체된 소켓이면 재연결 안 함
       connDot.classList.remove("on");
-      connText.textContent = "재연결 중...";
+      connText.dataset.key = "reconnecting";
+      connText.textContent = t("reconnecting");
       setTimeout(connect, 2000);    // 자동 재연결
     };
     sock.onerror = () => {
       connDot.classList.remove("on");
-      connText.textContent = "재연결 중...";
+      connText.dataset.key = "reconnecting";
+      connText.textContent = t("reconnecting");
     };
 
     sock.onmessage = (e) => {
@@ -240,7 +268,7 @@
         lines = [];
         currentText = "";
         stopPlayback();     // 화면 지우기: 대기 중인 음성도 정지
-        subtitles.innerHTML = '<div id="empty">통역이 시작되면<br>이곳에 자막이 표시됩니다.</div>';
+        subtitles.innerHTML = '<div id="empty">' + t("empty") + '</div>';
       } else if (msg.type === "clear") {
         if (currentText.trim()) lines.push(currentText.trim());
         currentText = "";
@@ -346,9 +374,10 @@
   function switchLang(lang) {
     currentLang = lang;
     langInitialized = true;
+    refreshUiText();
     lines = [];
     currentText = "";
-    subtitles.innerHTML = '<div id="empty">언어를 변경했습니다.<br>다음 문장부터 새 언어로 표시됩니다.</div>';
+    subtitles.innerHTML = '<div id="empty">' + t("changed") + '</div>';
     const old = ws;
     ws = null;
     if (old) { try { old.close(); } catch (e) {} }

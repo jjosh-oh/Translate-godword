@@ -90,7 +90,7 @@
 
 <div id="status-bar">
   <span id="status"></span>
-  <span class="fs-hint">화면 더블클릭 = 전체화면</span>
+  <span class="fs-hint" id="fs-hint">화면 더블클릭 = 전체화면</span>
 </div>
 
 <script>
@@ -114,8 +114,30 @@
     }
   }
 
+  // ── 화면 문구 언어 ──
+  // 교인들이 보는 화면이라 전환 단추를 놓지 않는다. 대표 번역 언어를 따라간다.
+  // (한국어로 통역하는 예배면 한국어, 그 밖에는 영어)
+  let uiEn = false;
+  const TXT = {
+    waiting: ["통역 대기 중...", "Waiting for interpretation…"],
+    translating: ["번역 중...", "Translating…"],
+    fsHint: ["화면 더블클릭 = 전체화면", "Double-click for fullscreen"]
+  };
+  function t(key) { return TXT[key][uiEn ? 1 : 0]; }
+
+  function applyUiLang(targetLang) {
+    uiEn = (targetLang || "English") !== "Korean";
+    const hint = document.getElementById("fs-hint");
+    if (hint) hint.textContent = t("fsHint");
+    const em = document.getElementById("empty-msg");
+    if (em) em.textContent = t("waiting");
+  }
+
   // 페이지 로드 시 현재 설정 불러오기
-  fetch("/settings").then(r => r.json()).then(applyDisplaySettings).catch(() => {});
+  fetch("/settings").then(r => r.json()).then(s => {
+    applyDisplaySettings(s);
+    applyUiLang(s && s.target_lang);      // 설정 수신을 기다리지 않고 바로 맞춘다
+  }).catch(() => {});
 
   function fitToLines(el, targetLines) {
     // 최대 크기는 운영자가 설정한 폰트 크기로 제한
@@ -173,18 +195,19 @@
       if (msg.type === "ping") return;
       if (msg.type === "settings") {
         applyDisplaySettings(msg.data);
+        applyUiLang(msg.data && msg.data.target_lang);
       } else if (msg.type === "reset") {
         lines = [];
         currentText = "";
         translationPending = false;
-        display.innerHTML = '<span id="empty-msg">통역 대기 중...</span>';
+        display.innerHTML = '<span id="empty-msg">' + t("waiting") + '</span>';
         display.classList.add("empty");
         status.textContent = "";
       } else if (msg.type === "clear") {
         if (currentText.trim()) lines.push(currentText.trim());
         currentText = "";
         renderLines("");
-        status.textContent = "번역 중...";
+        status.textContent = t("translating");
       } else if (msg.type === "done") {
         status.textContent = "";
         translationPending = false;
