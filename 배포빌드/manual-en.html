@@ -48,7 +48,7 @@
   <div class="logo">⛪</div>
   <h1>LiveWord</h1>
   <p style="font-size:16px;color:#555;margin-top:8px">Real-time sermon translation & subtitles</p>
-  <p class="ver">User Manual v1.0</p>
+  <p class="ver">User Manual v1.3</p>
 </div>
 
 <div class="toc">
@@ -81,8 +81,9 @@ projector and on the congregation's smartphones.</p>
   <tr><td>Projector display</td><td>Dedicated screen with adjustable font size and colors</td></tr>
   <tr><td>Phone access</td><td>Congregants view subtitles on their phones via a QR code</td></tr>
   <tr><td>Per-phone language</td><td>Each person picks their own language on their own phone</td></tr>
-  <tr><td>Sermon script</td><td>Upload a PDF/Word script to improve translation accuracy</td></tr>
-  <tr><td>Glossary & name map</td><td>Improve name recognition; fix name translations (e.g. 요한=John)</td></tr>
+  <tr><td>Recognition engine</td><td>Gemini 3.5 Live (default) or the classic Google engine — switch in the operator screen</td></tr>
+  <tr><td>Name/term map</td><td>Fix translations (e.g. 요한=John) and <strong>correct misheard words</strong> (e.g. 데모=대목)</td></tr>
+  <tr><td>Post-service review</td><td>Scans the day's log for mistranslations and shows the evidence (about $0.3 per service)</td></tr>
   <tr><td>Handout & poster</td><td>Print a congregant handout / poster with the QR and languages</td></tr>
   <tr><td>Languages</td><td>English, Japanese, Chinese, Spanish, French, German, Arabic, Korean</td></tr>
 </table>
@@ -181,6 +182,25 @@ projector and on the congregation's smartphones.</p>
   <p style="margin-top:8px"><strong>Domains → New Domain</strong> — one free fixed domain lets you reuse the same QR every week.</p>
 </div>
 
+<h3>④ Gemini API key (speech recognition — default engine)</h3>
+<p>The default recognition engine is <strong>Gemini 3.5 Live</strong>. Without this key the program
+falls back to the classic Google engine automatically — it still works, but subtitles appear a little later.
+This is a <strong>separate key</strong> from the Google Cloud key in ② above.</p>
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">Open Google AI Studio</span>
+  <p style="margin-top:8px"><span class="url">https://aistudio.google.com/apikey</span> (sign in with a Google account)</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">Create or copy a key</span>
+  <p style="margin-top:8px">Press <strong>Create API key</strong>. If you already have one, just copy it from the list.</p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">Paste it into the setup screen</span>
+  <p style="margin-top:8px">Setup screen → <strong>4. Gemini key</strong> → paste and save.</p>
+</div>
+<div class="warn">⚠ The free tier is enough for a service. Per-minute cost is actually lower than the
+classic engine ($0.009 vs $0.024).</div>
+
 <div class="page-break"></div>
 
 <!-- 4. First run -->
@@ -219,13 +239,15 @@ projector and on the congregation's smartphones.</p>
 <table>
   <tr><th>When</th><th>Task</th><th>How</th></tr>
   <tr><td>Before</td><td>Launch</td><td>Double-click LiveWord (operator app window opens automatically)</td></tr>
-  <tr><td>Before</td><td>Upload sermon script (optional)</td><td>Left panel "Upload script" → pick PDF/Word</td></tr>
   <tr><td>Before</td><td>Open projector screen</td><td>"▶ Open display window" → move to projector, go fullscreen</td></tr>
   <tr><td>Before</td><td>Share the QR</td><td>Print it in the bulletin, or use "Handout / Poster" print</td></tr>
   <tr><td>Start</td><td>Turn on mic</td><td>"🎤 Start mic" button</td></tr>
   <tr><td>During</td><td>Watch subtitles</td><td>On the projector and on phones</td></tr>
   <tr><td>During</td><td>Tidy the screen (optional)</td><td>"🧹 Clear screen" to wipe subtitles between segments</td></tr>
   <tr><td>After</td><td>Turn off mic</td><td>"⏹ Stop mic" button</td></tr>
+  <tr><td>After 1st service</td><td>Review what went wrong</td><td>"🔍 Review" → check the quoted evidence, then "Add to this week's map"</td></tr>
+  <tr><td>2nd service</td><td>Corrections apply</td><td>Nothing to do — what you added is already in effect</td></tr>
+  <tr><td>After</td><td>Clear this week's map</td><td>"✕ Clear this week" (the fixed map stays)</td></tr>
   <tr><td>After</td><td>Quit</td><td>Close the console window or press Ctrl+C</td></tr>
 </table>
 
@@ -238,9 +260,15 @@ projector and on the congregation's smartphones.</p>
   <li><strong>Start/Stop mic</strong> — begin/stop interpreting. Changing the audio input device applies immediately.</li>
   <li><strong>🧹 Clear screen</strong> — instantly wipes accumulated subtitles on the projector and all phones (handy between service segments)</li>
   <li><strong>Language</strong> — change source / primary target language. Takes effect from the next sentence even mid-service.</li>
-  <li><strong>Upload script</strong> — a PDF/Word sermon script improves accuracy</li>
-  <li><strong>Glossary</strong> — add church-specific names to improve speech recognition. Uploading adds new words to the existing list (existing kept).</li>
-  <li><strong>Name/term map</strong> — fix how specific words are translated (format: <code>한글=English</code>, e.g. <code>요한=John</code>).</li>
+  <li><strong>Recognition engine</strong> — default is <strong>Gemini 3.5 Live</strong> (fastest subtitles).
+  Switch to <strong>Default (latest_long)</strong> any time; it applies immediately.
+  Note: Gemini <strong>produces no subtitles during singing</strong> (it does not treat song as speech).</li>
+  <li><strong>Name/term map</strong> — two ways to use it.<br>
+  · <code>요한=John</code> (English value) fixes the translation.<br>
+  · <code>데모=대목</code> (Korean value) corrects a misheard word — usually the better choice, as the sentence stays natural.<br>
+  There are two lists: <strong>fixed</strong> (always used) and <strong>this week</strong> (for one Sunday, cleared afterwards).
+  Press <strong>Show list</strong> to view, edit or delete entries.</li>
+  <li><strong>Post-service review</strong> — finds what went wrong in the day's log. See section 5.</li>
   <li><strong>Display settings</strong> — font size, text/background color (live on the projector)</li>
   <li><strong>QR / Handout · Poster</strong> — the phone-access QR, plus buttons to print a <strong>congregant handout (with QR)</strong> and a <strong>custom poster</strong></li>
 </ul>

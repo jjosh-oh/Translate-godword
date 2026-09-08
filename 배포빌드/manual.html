@@ -69,7 +69,7 @@
   <div class="logo">⛪</div>
   <h1>LiveWord</h1>
   <p style="font-size:16px;color:#555;margin-top:8px">실시간 설교 동시통역 프로그램</p>
-  <p class="ver">사용설명서 v1.0</p>
+  <p class="ver">사용설명서 v1.3</p>
 </div>
 
 <div class="toc">
@@ -102,8 +102,9 @@
   <tr><td>빔프로젝터 송출</td><td>글자 크기·색상 조절 가능한 전용 화면</td></tr>
   <tr><td>셀폰 접속</td><td>QR코드로 교인 스마트폰에서 자막 확인</td></tr>
   <tr><td>셀폰별 언어 선택</td><td>교인마다 자기 휴대폰에서 원하는 언어를 골라 시청</td></tr>
-  <tr><td>설교 원고 활용</td><td>PDF/Word 원고 업로드 시 번역 정확도 향상</td></tr>
-  <tr><td>용어집·번역 대응표</td><td>고유명사 인식 향상, 이름 번역 지정(예: 요한=John)</td></tr>
+  <tr><td>음성인식 엔진 선택</td><td>Gemini 3.5 Live(기본) 또는 Google 기본 엔진. 운영자 화면에서 바꿈</td></tr>
+  <tr><td>번역 대응표</td><td>이름 번역 지정(예: 요한=John)과 <strong>잘못 들린 말 교정</strong>(예: 데모=대목)</td></tr>
+  <tr><td>예배 후 검토</td><td>그날 기록을 훑어 잘못 나간 곳을 근거와 함께 찾아줌 (예배당 약 $0.3)</td></tr>
   <tr><td>안내문·포스터 인쇄</td><td>QR·언어 안내를 교인용 안내문/포스터로 인쇄</td></tr>
   <tr><td>다국어 지원</td><td>영어, 일본어, 중국어, 스페인어, 프랑스어, 독일어, 아랍어</td></tr>
 </table>
@@ -251,6 +252,28 @@
   무료 고정 도메인 1개 발급 (매주 같은 QR코드 재사용 가능)</p>
 </div>
 
+<h3>④ Gemini API 키 (음성인식 — 기본 엔진)</h3>
+<p>음성인식 기본 엔진이 <strong>Gemini 3.5 Live</strong>입니다. 이 키가 없으면
+프로그램이 알아서 기존 Google 엔진으로 되돌아가 동작은 하지만, 자막이 조금 늦게 나옵니다.
+위 ②의 Google Cloud 키와는 <strong>별개의 키</strong>입니다.</p>
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">Google AI Studio 접속</span>
+  <p style="margin-top:8px"><span class="url">https://aistudio.google.com/apikey</span> 접속
+  (Google 계정으로 로그인)</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">키 만들기 또는 복사</span>
+  <p style="margin-top:8px"><strong>Create API key</strong>를 누릅니다.
+  이미 만들어 둔 키가 있으면 목록에서 복사 아이콘을 눌러 그대로 쓰면 됩니다.<br>
+  (새 프로젝트 만들기가 실패한다는 오류가 나와도, 기존 키가 있으면 그것을 쓰면 됩니다)</p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">설정 화면에 붙여넣기</span>
+  <p style="margin-top:8px">프로그램 설정 화면의 <strong>4. Gemini 키</strong> 칸에 붙여넣고 저장</p>
+</div>
+<div class="warn">⚠ 무료 등급으로도 예배에 쓸 수 있습니다. 분당 요금이 기존 엔진보다 오히려 쌉니다
+($0.009 vs $0.024).</div>
+
 <div class="page-break"></div>
 
 <!-- 4. 처음 실행 -->
@@ -294,15 +317,36 @@
 <table>
   <tr><th>순서</th><th>할 일</th><th>방법</th></tr>
   <tr><td>예배 전</td><td>프로그램 실행</td><td>바탕화면 LiveWord 더블클릭 (운영자 앱 창 자동 실행)</td></tr>
-  <tr><td>예배 전</td><td>설교 원고 업로드 (선택)</td><td>대시보드 좌측 "원고 업로드" → PDF/Word 선택</td></tr>
   <tr><td>예배 전</td><td>빔프로젝터 화면 열기</td><td>대시보드 "▶ 송출 창 열기" → 프로젝터로 옮겨 전체화면</td></tr>
   <tr><td>예배 전</td><td>셀폰 QR 안내</td><td>QR을 주보에 인쇄하거나 "안내문/포스터 인쇄"로 배포</td></tr>
   <tr><td>예배 시작</td><td>마이크 켜기</td><td>대시보드 "🎤 마이크 시작" 버튼</td></tr>
   <tr><td>예배 중</td><td>자막 확인</td><td>빔프로젝터 화면 및 셀폰에서 실시간 자막 확인</td></tr>
   <tr><td>예배 중</td><td>화면 정리 (선택)</td><td>순서가 바뀔 때 "🧹 화면 지우기"로 자막 비우기</td></tr>
   <tr><td>예배 후</td><td>마이크 끄기</td><td>대시보드 "⏹ 마이크 중지" 버튼</td></tr>
+  <tr><td>1부 예배 후</td><td>잘못 나간 곳 검토</td><td>대시보드 "🔍 검토하기" → 근거 문장을 확인하고 "이번 주 대응표에 넣기"</td></tr>
+  <tr><td>2부 예배</td><td>고친 내용이 반영됨</td><td>따로 할 일 없음. 넣은 교정이 바로 적용됩니다</td></tr>
+  <tr><td>예배 후</td><td>이번 주 것 비우기</td><td>대응표의 "✕ 이번 주 것 비우기" (고정 대응표는 남습니다)</td></tr>
   <tr><td>예배 후</td><td>프로그램 종료</td><td>콘솔 창 닫기 또는 Ctrl+C</td></tr>
 </table>
+
+<h3>같은 말씀으로 두 번 예배할 때</h3>
+<p>1부에서 음성인식이 잘못 들은 곳을 찾아 2부에 반영하는 흐름입니다.</p>
+<div class="step">
+  <span class="step-num">1</span><span class="step-title">검토하기</span>
+  <p style="margin-top:8px">1부가 끝나면 대시보드 <strong>"예배 후 검토"</strong> 카드에서
+  <strong>🔍 검토하기</strong>를 누릅니다. 30초~2분 걸립니다.</p>
+</div>
+<div class="step">
+  <span class="step-num">2</span><span class="step-title">근거를 확인하고 넣기</span>
+  <p style="margin-top:8px">각 항목에 <strong>근거가 된 문장</strong>이 함께 나옵니다.
+  <strong>반드시 눈으로 확인하고</strong> 맞으면 <strong>"이번 주 대응표에 넣기"</strong>를 누릅니다.<br>
+  성경은 앞뒤 절이 비슷해서 프로그램이 헷갈릴 수 있습니다.</p>
+</div>
+<div class="step">
+  <span class="step-num">3</span><span class="step-title">주가 끝나면 비우기</span>
+  <p style="margin-top:8px">그날 설교에만 쓰는 교정이므로 <strong>"✕ 이번 주 것 비우기"</strong>로
+  치웁니다. 쌓아두면 번역 요금이 올라갑니다.</p>
+</div>
 
 <!-- 6. 화면 구성 -->
 <h2>6. 화면 구성 안내</h2>
@@ -313,9 +357,15 @@
   <li><strong>마이크 켜기/끄기</strong> — 통역 시작·중지. 오디오 입력 장치를 바꾸면 즉시 적용됩니다.</li>
   <li><strong>🧹 화면 지우기</strong> — 송출창·모든 교인 셀폰의 쌓인 자막을 한 번에 깨끗이 비움 (예배 순서가 바뀔 때 유용)</li>
   <li><strong>언어 선택</strong> — 원본/번역(대표) 언어 변경. 송출 중에 바꿔도 다음 문장부터 바로 반영됩니다.</li>
-  <li><strong>원고 업로드</strong> — PDF 또는 Word 파일로 번역 정확도 향상</li>
-  <li><strong>용어집 업로드</strong> — 교회 고유명사를 추가해 음성인식 정확도 향상. 업로드 시 기존 용어집에 새 단어가 추가됩니다 (기존 단어 유지)</li>
-  <li><strong>번역 대응표</strong> — 특정 단어의 번역을 지정 (형식: <code>한글=English</code>, 예: <code>요한=John</code>). 이름·지명을 항상 원하는 대로 번역합니다.</li>
+  <li><strong>음성인식</strong> — 엔진 선택. 기본은 <strong>Gemini 3.5 Live</strong>(자막이 빠름)이고,
+  이상하면 <strong>기본 (latest_long)</strong>으로 바꾸면 즉시 적용됩니다.
+  단, Gemini는 <strong>찬양 시간에 자막이 나오지 않습니다</strong>(노래를 말로 인식하지 않음).</li>
+  <li><strong>번역 대응표</strong> — 두 가지로 쓸 수 있습니다.<br>
+  · <code>요한=John</code> 처럼 <strong>영어</strong>를 적으면 그 번역을 고정합니다.<br>
+  · <code>데모=대목</code> 처럼 <strong>한글</strong>을 적으면 잘못 들린 말을 바로잡습니다(이 편이 문장이 자연스럽습니다).<br>
+  대응표는 <strong>고정</strong>(늘 쓰는 이름)과 <strong>이번 주</strong>(그날 설교용, 나중에 비움) 두 칸입니다.
+  <strong>목록 보기</strong>를 누르면 등록된 것을 확인·수정·삭제할 수 있습니다.</li>
+  <li><strong>예배 후 검토</strong> — 그날 기록에서 잘못 나간 곳을 찾아 줍니다. 5장을 보십시오.</li>
   <li><strong>화면 설정</strong> — 글자 크기·색상·배경색 조절 (빔프로젝터에 실시간 반영)</li>
   <li><strong>QR코드 / 안내문 · 포스터 인쇄</strong> — 교인 접속용 QR. <strong>교인용 안내문(QR 포함)</strong>과 <strong>포스터 만들기</strong> 버튼으로 인쇄물 생성</li>
 </ul>
@@ -378,7 +428,19 @@
 한 번 올린 로고·이름은 그 컴퓨터에 저장되어 다음에도 그대로 쓰입니다.</p>
 
 <h3>Q. 셀폰에서 QR을 찍었는데 접속이 안 돼요</h3>
-<p>ngrok 설정이 완료되었는지 확인하세요. 대시보드의 QR코드 영역에 주소가 표시되어 있어야 합니다.</p>
+<p>먼저 ngrok 설정이 완료되었는지 확인하세요. 대시보드의 QR코드 영역에 주소가 표시되어 있어야 합니다.</p>
+<p><strong>QR을 찍으면 영어 안내 화면이 나오는 것은 정상입니다.</strong> 무료 ngrok을 쓰기 때문에
+휴대폰마다 <strong>처음 한 번</strong> 나옵니다. 파란 <strong>Visit Site</strong> 단추를 누르면
+자막 화면으로 들어가고, 그 뒤로는 다시 나오지 않습니다. 교인용 안내문·포스터에도 이 설명이 인쇄됩니다.</p>
+
+<h3>Q. 찬양 중에는 자막이 안 나옵니다</h3>
+<p>기본 엔진(Gemini 3.5 Live)은 <strong>노래를 말로 인식하지 않습니다.</strong> 설교에는 가장 빠르지만
+찬양 구간에서는 자막이 나오지 않습니다. 찬양도 자막이 필요하면 운영자 화면에서 음성인식을
+<strong>기본 (latest_long)</strong>으로 바꾸십시오.</p>
+
+<h3>Q. 설교 원고를 올리는 기능이 안 보입니다</h3>
+<p>실제로 번역·인식이 나아지지 않는 것이 확인되어 화면에서 감췄습니다(기능 자체는 남아 있습니다).
+정확도를 높이려면 <strong>번역 대응표</strong>를 쓰십시오 — 이쪽은 확실히 작동합니다.</p>
 
 <h3>Q. 검은 콘솔 창을 실수로 닫았어요</h3>
 <p>바탕화면 아이콘을 다시 더블클릭해 프로그램을 재시작하세요.</p>
