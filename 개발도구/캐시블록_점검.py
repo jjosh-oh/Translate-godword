@@ -46,9 +46,14 @@ def build_system(src, context, sermon=SERMON, target="English", source="Korean")
     # 함수 안에 있는 코드라 4칸 들여써져 있다 — 벗겨서 그대로 실행한다
     import textwrap
     block = textwrap.dedent(src[src.index(START):src.index(END)])
+    # 대응표는 고정(mapping.txt)과 그날치(mapping_주간.txt) 두 벌이고,
+    # server.py는 effective_mapping()으로 합쳐 쓴다. 여기서도 같은 이름을 준다.
+    weekly = {"구글": "죽을"}          # 값이 한글이면 인식 교정 — 프롬프트에는 안 들어간다
     ns = {"source_lang": source, "target_lang": target,
-          "translation_mapping": MAPPING, "sermon_context": sermon,
-          "context": context}
+          "translation_mapping": MAPPING, "weekly_mapping": weekly,
+          "effective_mapping": lambda: {**MAPPING, **weekly},
+          "sermon_context": sermon, "context": context,
+          "re": __import__("re"), "_HANGUL": __import__("re").compile(r"[가-힣]")}
     exec(block, ns)
     return ns["system"]
 
