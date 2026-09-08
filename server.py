@@ -773,6 +773,10 @@ def tunnel_url():
 #     (ufal/whisper_streaming 방식) 곧 바뀔 글자를 미리 번역하는 일이 없어진다.
 #  3) 시간 강제 끊기: 위 둘이 오래 안 걸릴 때를 위한 안전망. 스페인어처럼
 #     마침표가 안 붙는 언어에서 송출 화면이 1분씩 멈추는 것을 막는다.
+# 한국어 조각인지 가리는 검사 (번역에 보낼 값어치가 있는지)
+_KO_TEXT = re.compile(r"[가-힣0-9A-Za-z]")
+
+
 _SENT_END_CHARS = ".?!。？！…"
 _SENT_SPLIT = re.compile(r'(?<=[\.\?\!。？！…])\s*')
 
@@ -1361,6 +1365,18 @@ def audio_socket(ws):
         engine, _stt_events_v1)(src_code, audio_q, stop_flag)
     operator_queue.put(("stt_engine", engine))
 
+    def send(s):
+        # 원어가 한국어인데 한글도 영숫자도 한 자 없는 조각은 보내지 않는다.
+        # 인식기가 드물게 다른 언어 문자를 낸다(예: かきれ). 마침표만 남는
+        # 경우도 있다. 그대로 보내면 Claude가 번역 대신 설명문을 자막으로 낸다
+        # ("I'm ready to translate. Please provide the Korean text." 등이
+        #  실제로 교인 화면에 나갔다 — 로그에서 19건 확인).
+        # Segmenter의 \w 검사는 가나도 문자로 보므로 여기서 한 번 더 막는다.
+        # 숫자만 있는 조각("2010")은 정상이므로 통과시킨다.
+        if source_name == "Korean" and not _KO_TEXT.search(s):
+            return
+        enqueue_translation(s, source_name, my_session)
+
     seg = Segmenter(_time.time())
     for kind, text in events:
         now = _time.time()
@@ -1370,15 +1386,15 @@ def audio_socket(ws):
             seg = Segmenter(now)
         elif kind == "speech_end":
             for s in seg.on_speech_end(now):
-                enqueue_translation(s, source_name, my_session)
+                send(s)
         elif kind == "final":
             operator_queue.put(("input", text.strip()))
             for s in seg.on_final(text, now):
-                enqueue_translation(s, source_name, my_session)
+                send(s)
         elif kind == "interim":
             operator_queue.put(("interim", text.strip()))
             for s in seg.on_interim(text, now):
-                enqueue_translation(s, source_name, my_session)
+                send(s)
         elif kind == "error":
             operator_queue.put(("stt_error", text))
 
