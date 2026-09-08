@@ -18,8 +18,13 @@
       --accent-strong: #0e8e80;
       --accent-soft: rgba(22,186,169,0.12);
       --danger: #ff5c5c;
+      --live: #22c55e;
+      --warn: #f59e0b;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* hidden 속성이 인라인 display보다 이기게 한다.
+       (mapping-list처럼 display:flex가 인라인으로 있으면 hidden이 무시된다) */
+    [hidden] { display: none !important; }
     html, body { height: 100%; overflow: hidden; }
     body {
       background: var(--bg);
@@ -89,6 +94,17 @@
       border-radius: 12px;
       padding: 15px 16px;
     }
+
+    /* 상태 띠 — 지금 잘 돌아가는 것만 초록. 문제가 생기면 그 카드만 색이 바뀐다.
+       색을 장식이 아니라 신호로 쓰는 것이라, 예배 중에 어디가 막혔는지
+       글자를 읽지 않고도 알 수 있다. 폭은 항상 3px이라 색이 바뀌어도 안 흔들린다. */
+    .card {
+      border-left: 3px solid transparent;
+      transition: border-left-color 0.25s, box-shadow 0.25s;
+    }
+    .card.live { border-left-color: var(--live); box-shadow: inset 3px 0 14px -8px var(--live); }
+    .card.warn { border-left-color: var(--warn); }
+    .card.down { border-left-color: var(--danger); }
 
     .card-title {
       font-size: 10px;
@@ -297,8 +313,10 @@
       </div>
     </div>
 
-    <!-- 설교 자료 업로드 -->
-    <div class="card">
+    <!-- 설교 자료 업로드 — 화면에서 숨김 (2026-09-07)
+         원고를 올려도 번역·인식이 나아지지 않는 것이 실측으로 확인되어 감췄다.
+         기능은 그대로 살아 있다. 나중에 효과가 확인되면 아래 hidden만 지우면 된다. -->
+    <div class="card" hidden>
       <div class="card-title">설교 자료 업로드 (선택)</div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input type="file" id="sermon-file" style="display:none" onchange="uploadSermon()">
@@ -309,8 +327,10 @@
       <div id="upload-preview" style="margin-top:8px; font-size:11px; color:#555; line-height:1.5; display:none;"></div>
     </div>
 
-    <!-- 교회 용어집 (인식 힌트) -->
-    <div class="card">
+    <!-- 교회 용어집 — 화면에서 숨김 (2026-09-07)
+         용어집 278개를 넣은 것과 비운 것의 인식 결과가 글자 하나까지 같았다.
+         구글 V1이 speech_contexts를 무시한다. 기능은 살려둔다 (hidden만 지우면 복구). -->
+    <div class="card" hidden>
       <div class="card-title">교회 용어집 — 이름·지명 (인식 정확도↑)</div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input type="file" id="glossary-file" style="display:none" onchange="uploadGlossary()">
@@ -324,24 +344,58 @@
     <div class="card">
       <div class="card-title">번역 대응표 — 이름·단어 번역 지정</div>
       <div style="font-size:11px; color:#888; margin-bottom:8px;">
-        한글 단어와 원하는 번역을 입력하고 <strong>추가</strong>를 누르세요 &nbsp;예) 요한 → John
+        <strong>번역 지정</strong> — 예) 요한 → John &nbsp;·&nbsp;
+        <strong>인식 교정</strong> — 예) 데모 → 대목 (한글로 쓰면 잘못 들린 낱말을 바로잡습니다)
       </div>
       <div style="display:flex; gap:6px; align-items:center;">
         <input type="text" id="map-ko" placeholder="한글 (예: 요한)" style="flex:1; min-width:0; background:var(--card-2); color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; outline:none;">
         <span style="color:var(--accent);">→</span>
         <input type="text" id="map-en" placeholder="번역 (예: John)" style="flex:1; min-width:0; background:var(--card-2); color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; outline:none;">
-        <button class="btn btn-start" onclick="addMapping()" style="flex-shrink:0;">추가</button>
+        <button class="btn btn-start" id="map-add-btn" onclick="addMapping()" style="flex-shrink:0;">추가</button>
       </div>
-      <span id="mapping-status" style="display:inline-block; margin-top:8px; font-size:12px; color:#666;">불러오는 중...</span>
-      <div id="mapping-list" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <span id="mapping-status" style="font-size:12px; color:#666;">불러오는 중...</span>
+        <button class="btn btn-gray" id="mapping-toggle" onclick="toggleMappingList()"
+                style="font-size:11px; padding:4px 9px;">목록 보기</button>
+      </div>
+      <!-- 등록된 것이 많아지면 화면을 다 차지하므로 접어둔다 -->
+      <div id="mapping-list" hidden style="margin-top:8px; display:flex; flex-direction:column; gap:5px;"></div>
+      <!-- 그날 설교용 임시 대응표 — 1부에서 찾은 것을 2부에 쓰고, 그 주가 끝나면 비운다 -->
+      <div id="mapping-weekly-wrap" hidden style="margin-top:10px; padding-top:9px; border-top:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:11px; color:var(--warn);">이번 주만 쓰는 것 · <span id="mapping-weekly-count">0</span>개</span>
+          <button class="btn btn-gray" onclick="clearWeeklyMapping()" style="font-size:11px; padding:4px 9px;">✕ 이번 주 것 비우기</button>
+        </div>
+        <div id="mapping-weekly-list" style="margin-top:7px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+      </div>
       <div style="margin-top:10px;">
         <input type="file" id="mapping-file" style="display:none" onchange="uploadMapping()">
         <button class="btn btn-gray" onclick="document.getElementById('mapping-file').click()" style="font-size:11px; padding:5px 10px;">📄 파일로 한번에 올리기</button>
       </div>
     </div>
 
+    <!-- 예배 후 검토 -->
+    <div class="card" id="card-review">
+      <div class="card-title">예배 후 검토 — 잘못 나간 곳 찾기</div>
+      <div style="font-size:11px; color:#888; margin-bottom:8px;">
+        <strong>예배가 끝난 뒤</strong> 눌러주세요. 그날 기록을 훑어 음성인식이 잘못 알아들은 곳을 찾아줍니다.
+        <strong>근거가 된 문장을 그대로 보여주니 반드시 확인하고</strong> 넣으세요 — 성경은 앞뒤 절이 비슷해 헷갈릴 수 있습니다.
+      </div>
+      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+        <select id="review-count" style="flex:0 0 auto; width:auto;">
+          <option value="150">최근 150문장</option>
+          <option value="300" selected>최근 300문장</option>
+          <option value="600">최근 600문장</option>
+        </select>
+        <button class="btn btn-start" id="review-btn" onclick="runReview()">🔍 검토하기</button>
+        <button class="btn btn-gray" id="review-clear-btn" onclick="clearReview()" hidden>✕ 결과 지우기</button>
+        <span id="review-status" style="font-size:12px; color:var(--text-3);"></span>
+      </div>
+      <div id="review-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
     <!-- 실시간 미리보기 -->
-    <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:340px;">
+    <div class="card" id="card-preview" style="flex:1; display:flex; flex-direction:column; min-height:340px;">
       <div class="card-title" style="flex-shrink:0;">실시간 미리보기</div>
       <div class="preview-grid">
         <div class="preview-box">
@@ -388,14 +442,14 @@
       <div class="lang-row" style="margin-top:10px; font-size:12px; color:var(--text-2)">
         <span>음성인식</span>
         <select id="stt-engine" onchange="onSttEngineChange()">
+          <option value="gemini_live">Gemini 3.5 Live</option>
           <option value="v1">기본 (latest_long)</option>
-          <option value="chirp3">Chirp 3 (새 모델)</option>
         </select>
       </div>
     </div>
 
     <!-- 송출 제어 -->
-    <div class="card">
+    <div class="card" id="card-broadcast">
       <div class="card-title">송출 제어</div>
       <div class="controls-row">
         <button class="btn btn-start" id="start-btn" onclick="startBroadcast()">▶ 송출 창 열기</button>
@@ -411,11 +465,15 @@
     </div>
 
     <!-- 셀폰 접속 -->
-    <div class="card">
+    <div class="card" id="card-phone">
       <div class="card-title">셀폰 접속 (QR)</div>
       <input type="hidden" id="tunnel-url">
       <div style="display:flex; gap:12px; align-items:center;">
-        <img id="qr-img" style="width:88px; height:88px; background:#fff; border-radius:6px; padding:4px; flex-shrink:0;">
+        <!-- QR에 담는 주소를 /m 으로 짧게 해서 칸 수를 줄였다(40→37). 누르면 큰 QR이 열린다.
+             image-rendering:pixelated 는 쓰지 않는다 — 화면 배율이 150%면 0.75배 축소가
+             일어나는데, 픽셀 그대로 방식은 칸을 불규칙하게 버려 QR을 망가뜨린다. -->
+        <img id="qr-img" onclick="window.open('/guide','_blank')" title="누르면 큰 QR(교인용 안내문)이 열립니다"
+             style="width:88px; height:88px; background:#fff; border-radius:6px; padding:4px; flex-shrink:0; cursor:pointer;">
         <div style="min-width:0;">
           <div id="qr-link" style="font-size:11px; color:#7fe3d6; word-break:break-all;"></div>
           <div style="font-size:11px; color:#666; margin-top:4px;">교인들이 이 QR을 스캔하면 셀폰에서 자막을 봅니다</div>
@@ -523,6 +581,22 @@
   });
 
   let isListening = false;
+
+  // ── 카드 왼쪽 상태 띠 ──
+  function setCardState(id, state) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove("live", "warn", "down");
+    if (state) el.classList.add(state);
+  }
+
+  // 마이크는 켜져 있는데 자막이 20초 넘게 없으면 미리보기 카드가 주황으로 바뀐다.
+  let lastSubtitleAt = 0;
+  setInterval(function () {
+    if (!isListening) { setCardState("card-preview", null); return; }
+    const quiet = (Date.now() - lastSubtitleAt) / 1000;
+    setCardState("card-preview", (lastSubtitleAt && quiet < 20) ? "live" : "warn");
+  }, 2000);
   let inputLines = [];   // 완성된 인식 문장 누적
   let outputLines = [];  // 완성된 번역 문장 누적
 
@@ -557,6 +631,7 @@
 
   // 번역 미리보기: 완성 번역들 누적 + 맨 아래 현재 번역(스트리밍)
   function renderOutputPreview(streaming) {
+    lastSubtitleAt = Date.now();
     const op = document.getElementById("output-preview");
     op.innerHTML = "";
     outputLines.forEach(function (t) {
@@ -762,19 +837,61 @@
       st.style.color = "#666";
     }
     const box = document.getElementById("mapping-list");
+    const toggle = document.getElementById("mapping-toggle");
+    toggle.textContent = box.hidden ? ("목록 보기 (" + data.count + ")") : "목록 숨기기";
+    toggle.hidden = data.count === 0;
     box.innerHTML = "";
     (data.items || []).forEach(function (it) {
-      const chip = document.createElement("span");
-      chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; background:var(--card-2); border:1px solid var(--border-strong); border-radius:16px; padding:4px 6px 4px 11px; font-size:12px; color:var(--text);";
-      chip.textContent = it.k + " → " + it.v;
-      const x = document.createElement("button");
-      x.textContent = "✕";
-      x.title = "삭제";
-      x.style.cssText = "border:none; background:transparent; color:#ff7a7a; cursor:pointer; font-size:12px; padding:0 2px;";
-      x.onclick = function () { removeMapping(it.k); };
-      chip.appendChild(x);
-      box.appendChild(chip);
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; align-items:center; gap:8px; background:var(--card-2);"
+        + "border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:12px;";
+      const txt = document.createElement("span");
+      txt.style.cssText = "flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+      // 값이 한글이면 번역 지정이 아니라 인식 교정이다. 구분해서 보여준다.
+      const isFix = /[가-힣]/.test(it.v);
+      txt.innerHTML = esc(it.k) + ' <span style="color:var(--text-3)">→</span> ' + esc(it.v)
+        + ' <span style="color:' + (isFix ? "var(--warn)" : "var(--text-3)") + '; font-size:10px;">'
+        + (isFix ? "인식 교정" : "번역 지정") + '</span>';
+      row.appendChild(txt);
+      const edit = document.createElement("button");
+      edit.className = "btn btn-gray";
+      edit.style.cssText = "font-size:11px; padding:3px 8px; flex-shrink:0;";
+      edit.textContent = "수정";
+      edit.onclick = function () { startEditMapping(it.k, it.v); };
+      row.appendChild(edit);
+      const del = document.createElement("button");
+      del.className = "btn btn-gray";
+      del.style.cssText = "font-size:11px; padding:3px 8px; flex-shrink:0; color:#ff7a7a;";
+      del.textContent = "삭제";
+      del.onclick = function () {
+        if (confirm('"' + it.k + " → " + it.v + '" 를 지웁니다.')) removeMapping(it.k);
+      };
+      row.appendChild(del);
+      box.appendChild(row);
     });
+    renderWeeklyMapping(data.weekly || []);
+  }
+
+  function toggleMappingList() {
+    const box = document.getElementById("mapping-list");
+    box.hidden = !box.hidden;
+    loadMappingInfo();
+  }
+
+  // 수정 — 입력칸에 불러온 뒤 저장하면 바뀐다. 한글 쪽을 고치면 옛 항목은 지워진다.
+  let editingKey = null;
+
+  function startEditMapping(k, v) {
+    editingKey = k;
+    document.getElementById("map-ko").value = k;
+    document.getElementById("map-en").value = v;
+    document.getElementById("map-add-btn").textContent = "수정 저장";
+    document.getElementById("map-ko").focus();
+  }
+
+  function endEditMapping() {
+    editingKey = null;
+    document.getElementById("map-add-btn").textContent = "추가";
   }
 
   async function loadMappingInfo() {
@@ -791,11 +908,156 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ korean: k, english: v })
       });
-      const data = await res.json();
+      let data = await res.json();
       if (data.error) { alert(data.error); return; }
+      // 수정에서 한글 쪽을 바꿨으면 옛 항목이 남으므로 지운다
+      if (editingKey && editingKey !== k) {
+        const r2 = await fetch("/remove-mapping", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ korean: editingKey })
+        });
+        data = await r2.json();
+      }
+      endEditMapping();
       renderMapping(data);
       ko.value = ""; en.value = ""; ko.focus();
-    } catch (e) { alert("추가 실패"); }
+    } catch (e) { alert("저장 실패"); }
+  }
+
+  // ── 예배 후 검토 ──
+  // 찾기만 한다. 대응표에 넣는 것은 사람이 버튼을 눌러 고른 것만.
+  async function runReview() {
+    const btn = document.getElementById("review-btn");
+    const status = document.getElementById("review-status");
+    const list = document.getElementById("review-list");
+    const count = parseInt(document.getElementById("review-count").value, 10);
+    btn.disabled = true;
+    status.textContent = "검토 중... (문장 수에 따라 30초~2분)";
+    list.innerHTML = "";
+    try {
+      const res = await fetch("/review-log", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: count })
+      });
+      const d = await res.json();
+      if (d.error) { status.textContent = d.error; return; }
+      status.textContent = `${d.reviewed}문장 검토 · 찾은 것 ${d.findings.length}건 · $${d.cost}`;
+      if (!d.findings.length) {
+        list.innerHTML = '<div style="font-size:12px; color:var(--text-3);">잘못 나간 곳을 찾지 못했습니다.</div>';
+        return;
+      }
+      d.findings.forEach(function (f, i) { list.appendChild(reviewRow(f, i)); });
+      document.getElementById("review-clear-btn").hidden = false;
+    } catch (e) {
+      status.textContent = "검토 실패";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // 대응표에 넣기를 끝냈으면 찾아진 목록을 치운다 (대응표는 그대로 남는다)
+  function clearReview() {
+    document.getElementById("review-list").innerHTML = "";
+    document.getElementById("review-status").textContent = "";
+    document.getElementById("review-clear-btn").hidden = true;
+  }
+
+  function reviewRow(f, idx) {
+    const box = document.createElement("div");
+    box.style.cssText = "background:var(--card-2); border:1px solid var(--border);"
+      + "border-left:3px solid " + (f.fit ? "var(--live)" : "var(--warn)")
+      + "; border-radius:8px; padding:9px 11px; font-size:12px;";
+    const head = document.createElement("div");
+    head.innerHTML = '<span style="color:var(--danger)">' + esc(f.heard) + '</span>'
+      + ' <span style="color:var(--text-3)">→</span> '
+      + '<span style="color:var(--live)">' + esc(f.meant) + '</span>';
+    box.appendChild(head);
+    // 근거는 로그에 있던 문장을 그대로 보여준다. 사람이 직접 확인할 수 있어야 한다.
+    if (f.quote) {
+      const q = document.createElement("div");
+      q.style.cssText = "color:var(--text-2); margin-top:4px; font-size:11px;"
+        + "border-left:2px solid var(--border-strong); padding-left:7px;";
+      q.textContent = (f.line ? f.line + "번: " : "") + f.quote;
+      box.appendChild(q);
+    }
+    const foot = document.createElement("div");
+    foot.style.cssText = "margin-top:7px;";
+    if (f.fit) {
+      const b = document.createElement("button");
+      b.className = "btn btn-gray";
+      b.style.cssText = "font-size:11px; padding:4px 9px;";
+      b.textContent = "이번 주 대응표에 넣기";
+      b.onclick = async function () {
+        b.disabled = true;
+        try {
+          const res = await fetch("/add-weekly-mapping", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ korean: f.heard, english: f.meant })
+          });
+          const data = await res.json();
+          if (data.error) { alert(data.error); b.disabled = false; return; }
+          renderMapping(data);
+          b.textContent = "✓ 넣었습니다";
+        } catch (e) { alert("추가 실패"); b.disabled = false; }
+      };
+      foot.appendChild(b);
+    } else {
+      const note = document.createElement("span");
+      note.style.cssText = "color:var(--warn); font-size:11px;";
+      note.textContent = f.verified
+        ? "문장이 길어 대응표에는 넣지 않습니다 — 눈으로만 확인하세요"
+        : "근거를 확인하지 못했습니다 — 직접 들어보고 판단하세요";
+      foot.appendChild(note);
+    }
+    box.appendChild(foot);
+    return box;
+  }
+
+  function esc(s) {
+    const d = document.createElement("div");
+    d.textContent = s == null ? "" : s;
+    return d.innerHTML;
+  }
+
+  // ── 이번 주(그날 설교) 대응표 ──
+  // 같은 말씀으로 두 번 예배하므로, 1부에서 찾은 것을 2부에 쓰고 그 주가 끝나면 비운다.
+  // 이렇게 하면 대응표가 해마다 쌓여 문장마다 프롬프트에 실리는 문제가 없다.
+  function renderWeeklyMapping(items) {
+    const wrap = document.getElementById("mapping-weekly-wrap");
+    const box = document.getElementById("mapping-weekly-list");
+    document.getElementById("mapping-weekly-count").textContent = items.length;
+    wrap.hidden = items.length === 0;
+    box.innerHTML = "";
+    items.forEach(function (it) {
+      const chip = document.createElement("span");
+      chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; background:var(--card-2);"
+        + "border:1px solid var(--warn); border-radius:16px; padding:4px 6px 4px 11px;"
+        + "font-size:12px; color:var(--text);";
+      chip.textContent = it.k + " → " + it.v;
+      const x = document.createElement("button");
+      x.textContent = "✕";
+      x.title = "삭제";
+      x.style.cssText = "border:none; background:transparent; color:#ff7a7a; cursor:pointer; font-size:12px; padding:0 2px;";
+      x.onclick = async function () {
+        try {
+          const res = await fetch("/remove-weekly-mapping", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ korean: it.k })
+          });
+          renderMapping(await res.json());
+        } catch (e) {}
+      };
+      chip.appendChild(x);
+      box.appendChild(chip);
+    });
+  }
+
+  async function clearWeeklyMapping() {
+    if (!confirm("이번 주 것을 모두 비웁니다. 고정 대응표는 그대로 남습니다.")) return;
+    try {
+      const res = await fetch("/clear-weekly-mapping", { method: "POST" });
+      renderMapping(await res.json());
+    } catch (e) { alert("비우기 실패"); }
   }
 
   async function removeMapping(k) {
@@ -872,6 +1134,7 @@
         makeQR();
       } else {
         document.getElementById("tunnel-url").placeholder = "주소를 찾지 못했습니다 (터널 실행 확인)";
+        setCardState("card-phone", "warn");
       }
     } catch (e) {}
   }
@@ -880,16 +1143,25 @@
     let url = document.getElementById("tunnel-url").value.trim();
     if (!url) return;
     url = url.replace(/\/+$/, ""); // 끝 슬래시 제거
-    const mobileUrl = url + "/mobile";
+    // QR에는 짧은 주소(/m)를 담는다 — 칸이 적어야 카메라가 잘 읽는다 (40칸 → 37칸)
+    const mobileUrl = url + "/m";
     const qrImg = document.getElementById("qr-img");
+    // 화면 배율(devicePixelRatio)만큼 곱해서 받는다. 이 PC는 150%라 88px 자리가
+    // 실제로는 132픽셀이다. 그 크기로 정확히 받으면 브라우저가 늘리거나 줄이지
+    // 않으므로 칸 경계가 흐려지지 않는다. qzone(여백)은 스캔에 필요하다.
+    const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    const px = Math.round(88 * dpr);
     // 1순위: api.qrserver.com, 실패 시 quickchart.io로 대체
     qrImg.onerror = function () {
       qrImg.onerror = null;
-      qrImg.src = "https://quickchart.io/qr?size=300&text=" + encodeURIComponent(mobileUrl);
+      qrImg.src = "https://quickchart.io/qr?size=" + px + "&margin=2&text="
+        + encodeURIComponent(mobileUrl);
     };
-    qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(mobileUrl);
+    qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=" + px + "x" + px
+      + "&qzone=2&data=" + encodeURIComponent(mobileUrl);
     document.getElementById("qr-link").textContent = mobileUrl;
     document.getElementById("qr-area").style.display = "block";
+    setCardState("card-phone", "live");
   }
 
   // 페이지 로드 시 자동으로 주소 불러오기 시도
@@ -1047,6 +1319,7 @@
         document.getElementById("mic-btn").textContent = "⏹ 마이크 중지";
         document.getElementById("mic-btn").style.background = "#7a2d2d";
         isListening = true;
+        setCardState("card-broadcast", "live");
       }
       audioRetries = 0;
       hideAudioWarn();
@@ -1124,6 +1397,8 @@
     audioWS = null;
     document.getElementById("mic-btn").textContent = "🎤 마이크 시작";
     document.getElementById("mic-btn").style.background = "";
+    setCardState("card-broadcast", null);
+    setCardState("card-preview", null);
   }
 
   function onSourceLangChange() {

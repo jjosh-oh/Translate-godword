@@ -47,7 +47,7 @@ if os.path.exists(_key_path) and "GOOGLE_APPLICATION_CREDENTIALS" not in os.envi
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _key_path
 
 # 이 프로그램의 버전 — 새 버전 알림 비교 기준 (배포 시 함께 올림)
-APP_VERSION = "1.2"
+APP_VERSION = "1.3"
 UPDATE_API = "https://api.github.com/repos/jjosh-oh/Translate-godword/releases/latest"
 
 app = Flask(__name__)
@@ -255,9 +255,11 @@ settings = {
     "target_lang": "English",
     "source_lang": "Korean",
     "voice": False,   # 번역 음성(TTS) 사용 여부 (운영자 토글, 기본 꺼짐)
-    # 음성인식 엔진: "v1" = 지금까지 쓰던 latest_long, "chirp3" = 새 모델(V2)
-    # 기본값은 v1. 운영자 화면에서 바꿔 같은 설교로 비교할 수 있다.
-    "stt_engine": "v1",
+    # 음성인식 엔진: "v1" = 지금까지 쓰던 latest_long, "chirp3" = V2 모델,
+    # "gemini_live" = Gemini 3.5 Transcribe Live (GEMINI_API_KEY 필요)
+    # 기본값은 gemini_live. 운영자 화면에서 바꿔 같은 설교로 비교할 수 있다.
+    # GEMINI_API_KEY가 없는 PC에서는 아래 audio_socket이 v1으로 되돌린다.
+    "stt_engine": "gemini_live",
 }
 
 # 번역 언어 이름 → Google TTS 언어 코드
@@ -292,7 +294,74 @@ def load_glossary():
 load_glossary()
 
 # 번역 대응표 (한글=English 형식)
+#   translation_mapping — 항상 쓰는 고정 대응표 (mapping.txt)
+#   weekly_mapping      — 그날 설교에만 쓰는 임시 대응표 (mapping_주간.txt)
+# 교회는 같은 말씀으로 주일에 두 번 예배한다. 1부에서 잘못 나간 곳을 검토해
+# 임시 대응표에 넣고 2부에 쓰고, 그 주가 끝나면 비운다. 이렇게 하면 대응표가
+# 해마다 쌓여 문장마다 프롬프트에 실리는 문제(500개면 예배당 $23)가 없다.
 translation_mapping = {}
+weekly_mapping = {}
+
+WEEKLY_MAPPING_FILE = "mapping_주간.txt"
+
+
+def effective_mapping():
+    """번역에 실제로 쓰는 대응표. 그날 것이 고정보다 우선한다."""
+    merged = dict(translation_mapping)
+    merged.update(weekly_mapping)
+    return merged
+
+
+_HANGUL = re.compile(r"[가-힣]")
+
+
+def _apply_recognition_fixes(text):
+    """대응표 중 값이 '한글'인 항목은 인식 교정으로 쓴다.
+
+    예) 데모 → 대목   구글 지경 → 큰 구렁
+    들린 글자를 옳은 낱말로 바꿔 넣으면 번역은 문맥에 맞게 알아서 된다.
+    영어 번역을 강제로 지정하는 것보다 조사·어미가 자연스럽다.
+    (값이 영어인 항목은 지금까지처럼 프롬프트로 넘겨 번역을 고정한다)
+
+    긴 낱말부터 바꾼다 — 짧은 것이 먼저 걸리면 긴 항목이 영향을 받는다.
+    돌려주는 것: (바뀐 글, [(들린말, 옳은말), ...])
+    """
+    fixed, used = text, []
+    items = [(k, v) for k, v in effective_mapping().items()
+             if k and v and _HANGUL.search(v)]
+    for k, v in sorted(items, key=lambda kv: -len(kv[0])):
+        if k in fixed:
+            fixed = fixed.replace(k, v)
+            used.append((k, v))
+    return fixed, used
+
+
+def _weekly_path():
+    return os.path.join(APP_DIR, WEEKLY_MAPPING_FILE)
+
+
+def load_weekly_mapping():
+    global weekly_mapping
+    out = {}
+    try:
+        path = _weekly_path()
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and line:
+                        k, v = line.split("=", 1)
+                        out[k.strip()] = v.strip()
+    except Exception:
+        out = {}
+    weekly_mapping = out
+
+
+def _save_weekly_mapping():
+    with open(_weekly_path(), "w", encoding="utf-8") as f:
+        for k, v in weekly_mapping.items():
+            f.write("%s=%s\n" % (k, v))
+
 
 def load_mapping():
     global translation_mapping
@@ -309,6 +378,7 @@ def load_mapping():
         translation_mapping = {}
 
 load_mapping()
+load_weekly_mapping()
 
 
 # ===== 번역 비용 추적 =====
@@ -375,13 +445,17 @@ def _log_diag(key, msg, min_gap=10.0):
         pass
 
 
-def _log_translation(src, out, usage=None, warn=None, total=0.0):
+def _log_translation(src, out, usage=None, warn=None, total=0.0, fixes=None):
     try:
         path = os.path.join(APP_DIR, "로그.txt")
         import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         with open(path, "a", encoding="utf-8") as f:
-            f.write(f"[{ts}] 입력: {src}\n[{ts}] 번역: {out}\n")
+            f.write(f"[{ts}] 입력: {src}\n")
+            if fixes:
+                f.write("[%s] 교정: %s\n" % (
+                    ts, ", ".join("%s→%s" % (k, v) for k, v in fixes)))
+            f.write(f"[{ts}] 번역: {out}\n")
             if usage is not None:
                 f.write("[%s] 토큰: 입력 %d · 캐시읽기 %d · 캐시기록 %d · 출력 %d"
                         " | 이번 $%.4f · 누적 $%.2f\n"
@@ -399,6 +473,8 @@ def _log_translation(src, out, usage=None, warn=None, total=0.0):
 
 def translate_and_stream(text: str, target_lang: str, source_lang: str, is_primary: bool = True, context: str = ""):
     global last_output
+    # 인식 교정(한글 → 한글)은 번역 전에 글자를 바꿔 넣는다
+    text, _fixes = _apply_recognition_fixes(text)
     base_instruction = (
         f"You are a professional church interpreter providing live subtitles. "
         f"Translate ONLY the exact given text from {source_lang} into {target_lang}. "
@@ -410,8 +486,10 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
 
     # 번역 대응표가 있으면 프롬프트에 추가
     mapping_text = ""
-    if translation_mapping:
-        pairs = "\n".join(f"  {k} → {v}" for k, v in translation_mapping.items())
+    # 값이 한글인 항목은 위에서 이미 글자를 바꿨으므로 프롬프트에 넣지 않는다
+    _mapping = {k: v for k, v in effective_mapping().items() if not _HANGUL.search(v)}
+    if _mapping:
+        pairs = "\n".join(f"  {k} → {v}" for k, v in _mapping.items())
         mapping_text = (
             "\n\nName/term translation table (use these EXACT translations when the term appears):\n"
             + pairs
@@ -483,7 +561,7 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
         operator_queue.put(("cost_warn", warn))
     if is_primary:
         last_output = out
-        _log_translation(text, out, usage, warn, total)
+        _log_translation(text, out, usage, warn, total, _fixes)
         operator_queue.put(("done", ""))
 
     # 번역 음성(TTS): 운영자가 켰을 때만, 각 언어 셀폰(이어폰)으로 방송.
@@ -613,6 +691,7 @@ def operator():
 
 
 @app.route("/mobile")
+@app.route("/m")            # QR에 담는 주소를 짧게 하려고 둔 별명 (QR 칸 40→37)
 def mobile():
     return send_from_directory(BUNDLE_DIR, "mobile.html")
 
@@ -1184,6 +1263,130 @@ def _stt_events_chirp3(src_code, audio_q, stop_flag):
                 break
 
 
+async def _gemini_live_loop(audio_q, stop_flag, out_q, api_key):
+    """Gemini Live 세션을 유지하며 (kind, text)를 out_q로 넘긴다.
+
+    Live API는 asyncio 전용이고 이 프로그램의 나머지는 스레드+큐 구조다.
+    그래서 오디오를 넘겨주는 스레드 하나(feeder)와 이 코루틴이 만나는 지점에
+    asyncio 큐를 둔다. feeder는 재연결과 무관하게 하나만 돌아야 한다 —
+    둘이 되면 같은 audio_q를 두 스레드가 나눠 먹어 음성이 새 세션에 안 간다.
+    """
+    import asyncio
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=api_key)
+    aq = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def feeder():
+        while not stop_flag["stop"]:
+            chunk = audio_q.get()
+            loop.call_soon_threadsafe(aq.put_nowait, chunk)
+            if chunk is None:
+                return
+
+    threading.Thread(target=feeder, daemon=True).start()
+
+    config = types.LiveConnectConfig(
+        response_modalities=["TEXT"],
+        input_audio_transcription=types.AudioTranscriptionConfig(),
+    )
+
+    while not stop_flag["stop"]:
+        try:
+            async with client.aio.live.connect(
+                    model="gemini-3.5-transcribe-live", config=config) as session:
+                out_q.put(("stream_start", ""))
+
+                async def sender():
+                    while not stop_flag["stop"]:
+                        chunk = await aq.get()
+                        if chunk is None:
+                            break
+                        await session.send_realtime_input(
+                            audio=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000"))
+                    await session.send_realtime_input(audio_stream_end=True)
+
+                async def receiver():
+                    prev_text = ""
+                    async for response in session.receive():
+                        # 말이 멈췄다는 신호. V1의 SPEECH_ACTIVITY_END와 같은 자리다.
+                        # 이게 없으면 남은 자막이 시간 강제 끊기까지 기다려서
+                        # 문장 사이가 10초까지 벌어진다(실측).
+                        va = getattr(response, "voice_activity", None)
+                        if va and va.voice_activity_type == types.VoiceActivityType.ACTIVITY_END:
+                            out_q.put(("speech_end", ""))
+                        vs = getattr(response, "voice_activity_detection_signal", None)
+                        if vs and vs.vad_signal_type == types.VadSignalType.VAD_SIGNAL_TYPE_EOS:
+                            out_q.put(("speech_end", ""))
+                        sc = response.server_content
+                        if not sc:
+                            continue
+                        # interim이 실시간용이다. 문서의 기본 예제에는 이 필드가
+                        # 없어서, 안 읽으면 2분에 4번밖에 안 온다.
+                        # 이 글은 한 턴 동안 계속 누적된다. 누적이 끊기면(새 턴)
+                        # 글자 위치가 어긋나므로 문장 끊기를 새로 시작해야 한다.
+                        interim = getattr(sc, "interim_input_transcription", None)
+                        if interim and interim.text:
+                            text = interim.text
+                            if prev_text and not text.startswith(prev_text[:20]):
+                                # 끊기 전에 남은 것을 먼저 내보낸다. 안 그러면
+                                # 턴이 바뀔 때마다 아직 안 나간 자막이 버려진다.
+                                out_q.put(("speech_end", ""))
+                                out_q.put(("stream_start", ""))
+                            prev_text = text
+                            out_q.put(("interim", text))
+                        # input_transcription(최종)은 쓰지 않는다. V1의 is_final과
+                        # 달리 발화 단위가 아니라 그 턴 전체를 다시 보내주는 것이어서,
+                        # final로 넘기면 이미 나간 자막 여러 줄이 통째로 다시 나온다.
+
+                send_task = asyncio.create_task(sender())
+                recv_task = asyncio.create_task(receiver())
+                _, pending = await asyncio.wait(
+                    {send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+        except Exception as e:
+            out_q.put(("error", "gemini_live: " + str(e)[:110]))
+            if not stop_flag["stop"]:
+                await asyncio.sleep(1.0)
+    out_q.put(None)
+
+
+def _stt_events_gemini_live(src_code, audio_q, stop_flag):
+    """Gemini 3.5 Transcribe Live (Gemini Live API).
+
+    2026-09-07 실측(8/30 1부 설교 2분): 자막 243회·평균 0.53초·첫 자막 1.31초로
+    V1(164회·0.7초)보다 빈도가 높고 chirp_3(26회·4.7초)보다 훨씬 빠르다.
+    단, 찬양(노래) 구간에서는 VAD가 발화로 인식하지 않아 자막이 하나도 나오지
+    않는다. 찬양 시간에는 통역하지 않으므로 그대로 둔다.
+
+    말이 멈췄다는 별도 신호(speech_end)는 이 API에 없다. 대신 발화가 끝나면
+    input_transcription이 오므로 그것을 final로 넘긴다 — Segmenter는 final에서
+    남은 것을 전부 내보내므로 결과가 같다.
+    """
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        yield ("error", "gemini_live: GEMINI_API_KEY가 없습니다 (.env에 넣어야 합니다)")
+        return
+
+    import asyncio
+
+    out_q = queue.Queue()
+
+    def runner():
+        asyncio.run(_gemini_live_loop(audio_q, stop_flag, out_q, api_key))
+
+    threading.Thread(target=runner, daemon=True).start()
+
+    while True:
+        item = out_q.get()
+        if item is None:
+            return
+        yield item
+
+
 @sock.route("/audio")
 def audio_socket(ws):
     """브라우저에서 16kHz PCM 오디오를 받아 Google Speech로 스트리밍 인식 → 번역."""
@@ -1238,9 +1441,16 @@ def audio_socket(ws):
 
     import time as _time
 
-    engine = settings.get("stt_engine", "v1")
-    events = (_stt_events_chirp3 if engine == "chirp3" else _stt_events_v1)(
-        src_code, audio_q, stop_flag)
+    engine = settings.get("stt_engine", "gemini_live")
+    # 키가 없으면 자막이 아예 안 나온다. 예배 중에 그러면 대안이 없으므로
+    # 조용히 실패하지 않고 기본 엔진으로 돌아가고, 운영자 화면에 알린다.
+    if engine == "gemini_live" and not os.environ.get("GEMINI_API_KEY", "").strip():
+        engine = "v1"
+        operator_queue.put(("cost_warn",
+                            "GEMINI_API_KEY가 없어 기본 엔진(latest_long)으로 시작했습니다"))
+    events = {"chirp3": _stt_events_chirp3,
+              "gemini_live": _stt_events_gemini_live}.get(
+        engine, _stt_events_v1)(src_code, audio_q, stop_flag)
     operator_queue.put(("stt_engine", engine))
 
     seg = Segmenter(_time.time())
@@ -1414,8 +1624,10 @@ def _save_mapping():
 
 def _mapping_payload():
     items = [{"k": k, "v": v} for k, v in translation_mapping.items()]
+    weekly = [{"k": k, "v": v} for k, v in weekly_mapping.items()]
     preview = ", ".join(f"{k}→{v}" for k, v in list(translation_mapping.items())[:5])
-    return {"status": "ok", "count": len(items), "preview": preview, "items": items}
+    return {"status": "ok", "count": len(items), "preview": preview,
+            "items": items, "weekly": weekly, "weekly_count": len(weekly)}
 
 
 @app.route("/upload-mapping", methods=["POST"])
@@ -1466,9 +1678,171 @@ def remove_mapping():
     return jsonify(_mapping_payload())
 
 
+@app.route("/add-weekly-mapping", methods=["POST"])
+def add_weekly_mapping():
+    """그날 설교용 임시 대응표에 추가. 예배 후 검토에서 고른 것이 여기로 들어온다."""
+    data = request.get_json(force=True)
+    k = (data.get("korean") or "").strip()
+    v = (data.get("english") or "").strip()
+    if not k or not v:
+        return jsonify({"error": "단어와 번역을 모두 입력하세요."}), 400
+    weekly_mapping[k] = v
+    _save_weekly_mapping()
+    return jsonify(_mapping_payload())
+
+
+@app.route("/remove-weekly-mapping", methods=["POST"])
+def remove_weekly_mapping():
+    """그날 대응표에서 한 항목만 뺀다."""
+    data = request.get_json(force=True)
+    k = (data.get("korean") or "").strip()
+    if k in weekly_mapping:
+        del weekly_mapping[k]
+        _save_weekly_mapping()
+    return jsonify(_mapping_payload())
+
+
+@app.route("/clear-weekly-mapping", methods=["POST"])
+def clear_weekly_mapping():
+    """그날 것을 전부 비운다. 고정 대응표(mapping.txt)는 건드리지 않는다."""
+    weekly_mapping.clear()
+    _save_weekly_mapping()
+    return jsonify(_mapping_payload())
+
+
 @app.route("/mapping-info")
 def mapping_info():
     return jsonify(_mapping_payload())
+
+
+# ===== 예배 후 검토 =====
+# 로그.txt의 (입력 → 번역) 기록을 훑어 '음성인식이 잘못 알아들어 번역까지 틀어진 곳'을
+# 찾는다. 찾기만 한다 — 대응표는 건드리지 않는다. 넣는 것은 운영자가 고른 것만이다.
+# 대응표는 이후 모든 번역에 강제로 적용되므로, 자동으로 쌓으면 잘못된 한 줄이
+# 그 뒤 모든 예배를 조용히 망가뜨린다.
+
+_REVIEW_BATCH = 150      # 한 번에 검토할 문장 수 (실측상 이 크기에서 근거를 잘 찾는다)
+_REVIEW_MAX = 1000
+
+
+_REVIEW_HEADERS = {"잘못 인식된 말", "원래 말", "영어로는", "표적합", "근거", "근거(짧게)",
+                   "잘못 들린 말", "원래 한국어 말", "근거 항목번호", "근거 문장 그대로"}
+
+
+def _parse_log_pairs(raw):
+    """로그.txt에서 (입력, 번역) 짝을 뽑는다."""
+    pairs, cur = [], None
+    for line in raw.splitlines():
+        m = re.match(r"\[\d\d:\d\d:\d\d\] 입력: (.*)", line)
+        if m:
+            cur = m.group(1).strip()
+            continue
+        m = re.match(r"\[\d\d:\d\d:\d\d\] 번역: (.*)", line)
+        if m and cur:
+            pairs.append((cur, m.group(1).strip()))
+            cur = None
+    return pairs
+
+
+_REVIEW_INSTRUCTION = (
+    "아래는 한국어 설교를 실시간 통역한 기록입니다. 각 항목은 음성인식 결과(인식)와 "
+    "그것을 영어로 옮긴 것(번역)입니다.\n\n"
+    "설교 맥락에서 **음성인식이 잘못 알아들은 곳**을 찾아주세요.\n\n"
+    "규칙이 있습니다. 반드시 지켜주세요.\n"
+    "1. 원래 무슨 말이었을지 **추측하지 마세요.** 같은 대목이 다른 항목에서 제대로 "
+    "인식된 것이 목록 안에 있을 때만 고르세요.\n"
+    "2. 그 제대로 인식된 문장을 **글자 그대로** 인용하세요. 요약하거나 고쳐 쓰지 마세요.\n"
+    "3. 성경은 앞뒤 절이 비슷해 보여도 서로 다른 문장입니다. 인용한 문장이 정말 "
+    "**같은 문장**인지 확인하세요. 다른 절이면 고르지 마세요.\n"
+    "4. 고치는 말은 **한국어로** 적으세요(영어 번역이 아니라 원래 한국어 낱말).\n\n"
+    "각 건을 이 형식으로 한 줄씩, 다른 설명 없이 쓰세요:\n"
+    "잘못 들린 말 | 원래 한국어 말 | 근거 항목번호 | 근거 문장 그대로\n\n"
+    "예) 구글 | 죽을 | 41 | 내가 이 불꽃 가운데서 너무 괴로워 죽을 지경입니다\n\n"
+    "찾은 것이 없으면 '없음'이라고만 쓰세요.\n\n"
+)
+
+
+def _review_batch(pairs):
+    """한 묶음을 검토해 (찾은 것 목록, usage)를 돌려준다.
+
+    클로드의 말을 그대로 믿지 않는다. 인용한 근거 문장이 정말 로그에 있는지,
+    그 안에 제안한 낱말이 들어 있는지 검사해서 통과한 것만 '넣기 가능'으로 표시한다.
+    """
+    body = "\n".join("%d. 인식: %s\n   번역: %s" % (i + 1, k, v)
+                     for i, (k, v) in enumerate(pairs))
+    msg = get_client().messages.create(
+        model="claude-opus-4-8", max_tokens=2000,
+        messages=[{"role": "user", "content": _REVIEW_INSTRUCTION + body}])
+    text = msg.content[0].text if msg.content else ""
+    inputs = [k for k, _ in pairs]
+    joined = "\n".join(inputs)
+    out = []
+    for line in text.splitlines():
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) < 4 or not parts[0] or parts[0].startswith("없음"):
+            continue
+        heard, meant, no, quote = parts[0], parts[1], parts[2], parts[3]
+        if heard in _REVIEW_HEADERS or meant in _REVIEW_HEADERS:
+            continue
+        if re.fullmatch(r"[\d\s.]+", heard) or heard == meant or not meant:
+            continue
+
+        # ① 인용한 문장이 정말 로그에 있는가 (지어낸 근거를 걸러낸다)
+        quote_ok = bool(quote) and any(quote in s for s in inputs)
+        # ② 그 인용 문장 안에 제안한 낱말이 실제로 있는가
+        meant_in_quote = bool(quote) and meant in quote
+        # ③ 제대로 인식된 적이 아예 있는가 (없으면 추측일 가능성이 높다)
+        meant_seen = meant in joined
+        verified = quote_ok and meant_in_quote and meant_seen
+        # 낱말·짧은 구절만 표에 넣을 수 있다
+        fit = verified and len(heard) <= 20
+
+        out.append({"heard": heard, "meant": meant, "line": no,
+                    "quote": quote, "verified": verified, "fit": fit})
+    return out, msg.usage
+
+
+@app.route("/review-log", methods=["POST"])
+def review_log():
+    """예배가 끝난 뒤 그날 기록을 검토한다. 대응표는 바뀌지 않는다."""
+    data = request.get_json(silent=True) or {}
+    try:
+        count = int(data.get("count") or 300)
+    except Exception:
+        count = 300
+    count = max(20, min(_REVIEW_MAX, count))
+
+    try:
+        with open(os.path.join(APP_DIR, "로그.txt"), "r",
+                  encoding="utf-8", errors="ignore") as f:
+            raw = f.read()
+    except Exception as e:
+        return jsonify(error="로그를 읽을 수 없습니다: %s" % str(e)[:80]), 500
+
+    pairs = [p for p in _parse_log_pairs(raw) if re.search(r"[가-힣]", p[0])][-count:]
+    if not pairs:
+        return jsonify(error="검토할 기록이 없습니다"), 400
+
+    findings, cost = [], 0.0
+    try:
+        for i in range(0, len(pairs), _REVIEW_BATCH):
+            got, usage = _review_batch(pairs[i:i + _REVIEW_BATCH])
+            findings += got
+            if usage is not None:
+                cost += _usage_cost(usage)
+    except Exception as e:
+        return jsonify(error="검토 중 오류: %s" % str(e)[:120]), 500
+
+    # 같은 낱말이 여러 번 잡히면 하나로 합친다
+    seen, merged = set(), []
+    for f in sorted(findings, key=lambda x: not x["verified"]):
+        key = (f["heard"], f["meant"])
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(f)
+
+    return jsonify(findings=merged, reviewed=len(pairs), cost=round(cost, 3))
 
 
 @app.route("/viewer-count")
@@ -1630,8 +2004,9 @@ def setup():
 def setup_status():
     has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
     has_ngrok_token = bool(os.environ.get("NGROK_AUTHTOKEN"))
+    has_gemini = bool(os.environ.get("GEMINI_API_KEY"))
     ngrok_domain = os.environ.get("NGROK_DOMAIN", "")
-    if not has_anthropic or not has_ngrok_token:
+    if not has_anthropic or not has_ngrok_token or not has_gemini:
         env_path = os.path.join(APP_DIR, ".env")
         if os.path.exists(env_path):
             with open(env_path, "r", encoding="utf-8-sig") as f:
@@ -1640,11 +2015,14 @@ def setup_status():
                 has_anthropic = "ANTHROPIC_API_KEY=" in content
             if not has_ngrok_token:
                 has_ngrok_token = "NGROK_AUTHTOKEN=" in content
+            if not has_gemini:
+                has_gemini = "GEMINI_API_KEY=" in content
     has_google = os.path.exists(os.path.join(APP_DIR, "google-key.json"))
     return jsonify(
         has_anthropic_key=has_anthropic,
         has_google_key=has_google,
         has_ngrok_token=has_ngrok_token,
+        has_gemini_key=has_gemini,
         ngrok_domain=ngrok_domain,
         ngrok_url=_ngrok_url,
     )
@@ -1656,8 +2034,9 @@ def setup_save():
     anthropic_key = (data.get("anthropic_key") or "").strip()
     ngrok_token   = (data.get("ngrok_token") or "").strip()
     ngrok_domain  = (data.get("ngrok_domain") or "").strip()
+    gemini_key    = (data.get("gemini_key") or "").strip()
 
-    if not anthropic_key and not ngrok_token and not ngrok_domain:
+    if not anthropic_key and not ngrok_token and not ngrok_domain and not gemini_key:
         return jsonify(ok=False, error="저장할 값이 없습니다")
     if anthropic_key and not anthropic_key.startswith("sk-"):
         return jsonify(ok=False, error="올바른 Anthropic 키 형식이 아닙니다 (sk-ant-... 로 시작해야 함)")
@@ -1684,6 +2063,9 @@ def setup_save():
         if ngrok_domain:
             env_vars["NGROK_DOMAIN"] = ngrok_domain
             os.environ["NGROK_DOMAIN"] = ngrok_domain
+        if gemini_key:
+            env_vars["GEMINI_API_KEY"] = gemini_key
+            os.environ["GEMINI_API_KEY"] = gemini_key
 
         with open(env_path, "w", encoding="utf-8") as f:
             for k, v in env_vars.items():

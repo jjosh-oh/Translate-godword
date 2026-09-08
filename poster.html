@@ -118,6 +118,13 @@
       <div class="qr-url" id="qr-url"></div>
       <div class="step-no" style="margin-top:14px;">1</div>
       <div class="step-t">Scan the QR code<br>to connect</div>
+      <!-- ngrok 무료 요금제가 브라우저마다 처음 한 번 영어 경고 페이지를 띄운다.
+           코드로는 없앨 수 없어 미리 알려 준다. -->
+      <div style="margin-top:8px; font-size:0.78em; line-height:1.45; opacity:0.85;">
+        처음 접속 시 영어 안내 화면이 한 번 나옵니다<br>
+        파란 <strong>Visit Site</strong> 단추를 누르세요<br>
+        <span style="opacity:0.8">Tap the blue <strong>Visit Site</strong> button the first time</span>
+      </div>
     </div>
 
     <div class="col">
@@ -238,7 +245,7 @@
     document.getElementById("qr-url").textContent = mobileUrl;
   }
   fetch("/tunnel-url").then(r=>r.json()).then(d => {
-    if (d.url) makeQR(d.url.replace(/\/+$/,"") + "/mobile");
+    if (d.url) makeQR(d.url.replace(/\/+$/,"") + "/m");
   }).catch(()=>{});
 </script>
 

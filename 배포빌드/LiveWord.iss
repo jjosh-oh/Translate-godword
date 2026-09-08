@@ -2,7 +2,7 @@
 ; 빌드: iscc LiveWord.iss
 
 #define AppName "LiveWord"
-#define AppVersion "1.2"
+#define AppVersion "1.3"
 #define AppPublisher "Church"
 #define AppExeName "LiveWord.exe"
 #define SourceDir "dist\LiveWord"

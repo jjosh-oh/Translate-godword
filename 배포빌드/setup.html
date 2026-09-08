@@ -211,6 +211,24 @@
     <div id="ngrok-status" class="test-result" style="display:none"></div>
   </div>
 
+  <!-- 4. Gemini (음성인식 엔진 선택 시에만) -->
+  <div class="section">
+    <div class="section-title">4. Gemini 키 <span class="step-badge">선택</span></div>
+    <p style="font-size:12px;color:#666;margin-bottom:14px;line-height:1.7">
+      운영자 화면에서 음성인식을 "Gemini 3.5 Live"로 고를 때만 필요합니다.<br>
+      비워두면 기본 엔진(latest_long)과 Chirp 3는 그대로 쓸 수 있습니다.
+    </p>
+
+    <div class="field">
+      <label>Gemini API 키 <span>(Google AI Studio에서 복사)</span></label>
+      <input type="password" id="gemini-key" placeholder="AIza..." autocomplete="off">
+      <div class="hint">
+        발급: <a href="#" onclick="openLink('https://aistudio.google.com/apikey'); return false;">aistudio.google.com/apikey</a>
+      </div>
+      <div id="gemini-already" class="already-set" style="display:none">✓ 이미 Gemini 키가 저장되어 있습니다</div>
+    </div>
+  </div>
+
   <!-- 저장 -->
   <button class="save-btn" id="save-btn" onclick="saveSettings()">설정 저장</button>
   <div class="status-msg" id="status-msg"></div>
@@ -266,6 +284,7 @@
     if (d.has_anthropic_key) document.getElementById("anthropic-already").style.display = "block";
     if (d.has_google_key) document.getElementById("google-already").style.display = "block";
     if (d.has_ngrok_token) document.getElementById("ngrok-already").style.display = "block";
+    if (d.has_gemini_key) document.getElementById("gemini-already").style.display = "block";
     if (d.ngrok_domain) document.getElementById("ngrok-domain").value = d.ngrok_domain;
     if (d.ngrok_url) {
       const el = document.getElementById("ngrok-status");
@@ -337,6 +356,7 @@
     const anthropicKey = document.getElementById("anthropic-key").value.trim();
     const ngrokToken   = document.getElementById("ngrok-token").value.trim();
     const ngrokDomain  = document.getElementById("ngrok-domain").value.trim();
+    const geminiKey    = document.getElementById("gemini-key").value.trim();
     const btn = document.getElementById("save-btn");
     const msg = document.getElementById("status-msg");
 
@@ -357,11 +377,11 @@
       }
 
       // 2) Anthropic 키 + ngrok 설정 한 번에 저장
-      if (anthropicKey || ngrokToken || ngrokDomain) {
+      if (anthropicKey || ngrokToken || ngrokDomain || geminiKey) {
         const r = await fetch("/setup-save", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({ anthropic_key: anthropicKey, ngrok_token: ngrokToken, ngrok_domain: ngrokDomain })
+          body: JSON.stringify({ anthropic_key: anthropicKey, ngrok_token: ngrokToken, ngrok_domain: ngrokDomain, gemini_key: geminiKey })
         });
         const d = await r.json();
         if (!d.ok) {
