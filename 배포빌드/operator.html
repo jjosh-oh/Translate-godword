@@ -310,8 +310,10 @@
       </div>
     </div>
 
-    <!-- 설교 자료 업로드 -->
-    <div class="card">
+    <!-- 설교 자료 업로드 — 화면에서 숨김 (2026-09-07)
+         원고를 올려도 번역·인식이 나아지지 않는 것이 실측으로 확인되어 감췄다.
+         기능은 그대로 살아 있다. 나중에 효과가 확인되면 아래 hidden만 지우면 된다. -->
+    <div class="card" hidden>
       <div class="card-title">설교 자료 업로드 (선택)</div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input type="file" id="sermon-file" style="display:none" onchange="uploadSermon()">
@@ -322,8 +324,10 @@
       <div id="upload-preview" style="margin-top:8px; font-size:11px; color:#555; line-height:1.5; display:none;"></div>
     </div>
 
-    <!-- 교회 용어집 (인식 힌트) -->
-    <div class="card">
+    <!-- 교회 용어집 — 화면에서 숨김 (2026-09-07)
+         용어집 278개를 넣은 것과 비운 것의 인식 결과가 글자 하나까지 같았다.
+         구글 V1이 speech_contexts를 무시한다. 기능은 살려둔다 (hidden만 지우면 복구). -->
+    <div class="card" hidden>
       <div class="card-title">교회 용어집 — 이름·지명 (인식 정확도↑)</div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input type="file" id="glossary-file" style="display:none" onchange="uploadGlossary()">
@@ -367,6 +371,7 @@
           <option value="600">최근 600문장</option>
         </select>
         <button class="btn btn-start" id="review-btn" onclick="runReview()">🔍 검토하기</button>
+        <button class="btn btn-gray" id="review-clear-btn" onclick="clearReview()" hidden>✕ 결과 지우기</button>
         <span id="review-status" style="font-size:12px; color:var(--text-3);"></span>
       </div>
       <div id="review-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
@@ -870,11 +875,19 @@
         return;
       }
       d.findings.forEach(function (f, i) { list.appendChild(reviewRow(f, i)); });
+      document.getElementById("review-clear-btn").hidden = false;
     } catch (e) {
       status.textContent = "검토 실패";
     } finally {
       btn.disabled = false;
     }
+  }
+
+  // 대응표에 넣기를 끝냈으면 찾아진 목록을 치운다 (대응표는 그대로 남는다)
+  function clearReview() {
+    document.getElementById("review-list").innerHTML = "";
+    document.getElementById("review-status").textContent = "";
+    document.getElementById("review-clear-btn").hidden = true;
   }
 
   function reviewRow(f, idx) {
