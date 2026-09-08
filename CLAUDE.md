@@ -4,7 +4,7 @@
 Windows 데스크톱 프로그램. SAEROUN Reformed Church에서 매주 실제 예배에 사용 중이며,
 한 선교사에게 기부 예정.
 
-**현재 버전: v1.3** (브랜치 `review-after-service`, `main` 병합 대기) · 저장소: `jjosh-oh/Translate-godword`
+**현재 버전: v1.3** (`main`에 병합됨) · 저장소: `jjosh-oh/Translate-godword`
 
 ---
 
@@ -136,6 +136,9 @@ PowerShell은 한글 인코딩·따옴표 문제로 자주 실패한다.
 | `hidden`을 줬는데 안 숨음 | 인라인 `display:flex`가 브라우저 기본 `[hidden]{display:none}`을 이긴다. `operator.html`에 `[hidden]{display:none!important}`를 넣어 해결했다. 검증할 때 `element.hidden`(속성)만 보지 말고 `getComputedStyle`로 실제 표시 상태를 볼 것 |
 | Gemini Live에서 자막이 2분에 4번만 옴 | 실시간 텍스트는 `interim_input_transcription`으로 **따로** 온다. 구글 문서 기본 예제(`input_transcription`)만 읽으면 이렇게 된다 |
 | Gemini Live에서 자막이 통째로 다시 나옴 | `input_transcription`은 V1의 `is_final`과 달리 **그 턴 전체**를 다시 보낸다. final로 넘기지 말 것. 턴이 바뀌면(누적이 끊기면) `speech_end`로 남은 것을 내보낸 뒤 `stream_start`로 다시 시작한다 |
+| **영어 번역에 일본어·다른 언어가 섞임** | 번역이 아니라 **음성인식** 문제다. `AudioTranscriptionConfig()`를 비워 넘기면 **언어 자동 감지**로 돌아서 한국어 발화의 앞부분을 다른 언어로 찍는다. 로그에 `かきれ`·`eu e o Congo`·`is not available.`이 입력으로 찍혔다. 화면에 나간 것은 그 언어가 아니라 **Claude의 설명문**이었다. `language_hints=LanguageHints(language_codes=[src_code])`로 **원어를 고정할 것**(`language_codes`는 deprecated) |
+| **첫 소절이 자막에 중복되어 나옴** | 턴 경계를 **앞 20자 비교**로 판정하면, 인식기가 앞부분을 고쳐 쓸 때(마침표가 사라지거나 낱말이 붙거나 수정될 때) 같은 턴을 새 턴으로 오인한다. `stream_start`가 `Segmenter`를 새로 만들어 글자 위치와 중복 방지 창이 초기화되므로 이미 나간 자막이 다시 나간다. **누적 길이가 절반 아래로 줄었을 때만** 새 턴으로 볼 것 — 실측상 진짜 턴 교체는 1~9%로 떨어지고 앞부분 수정은 99%를 유지해 여유가 크다 |
+| 자막에 "Please provide the Korean text" 같은 안내문이 뜸 | 마침표만 남은 조각이나 다른 언어 조각을 Claude에 보내면 번역 대신 설명문을 낸다. 로그에서 19건 확인. `Segmenter._worth_translating`의 `\w` 검사는 **가나도 문자로 보므로** 통과한다. 음성인식 경로에서 `[가-힣0-9A-Za-z]`가 하나도 없는 조각을 걸러야 한다(원어가 한국어일 때만 — 스페인어·일본어 설교는 영향 없음) |
 
 **문장 끊는 규칙**은 `Segmenter` 클래스(모듈 최상위)에 모여 있다. 세 신호를 순서대로 쓴다.
 
