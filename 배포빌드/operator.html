@@ -22,6 +22,9 @@
       --warn: #f59e0b;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* hidden 속성이 인라인 display보다 이기게 한다.
+       (mapping-list처럼 display:flex가 인라인으로 있으면 hidden이 무시된다) */
+    [hidden] { display: none !important; }
     html, body { height: 100%; overflow: hidden; }
     body {
       background: var(--bg);
