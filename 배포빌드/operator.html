@@ -469,9 +469,9 @@
       <div class="card-title">셀폰 접속 (QR)</div>
       <input type="hidden" id="tunnel-url">
       <div style="display:flex; gap:12px; align-items:center;">
-        <!-- 88px에서는 카메라가 못 읽었다(주소가 55자). 크기와 여백이 인식률을 좌우한다 -->
+        <!-- QR에 담는 주소를 /m 으로 짧게 해서 칸 수를 줄였다(40→37). 누르면 큰 QR이 열린다 -->
         <img id="qr-img" onclick="window.open('/guide','_blank')" title="누르면 큰 QR(교인용 안내문)이 열립니다"
-             style="width:150px; height:150px; background:#fff; border-radius:6px; padding:6px; flex-shrink:0; cursor:pointer;">
+             style="width:88px; height:88px; background:#fff; border-radius:6px; padding:4px; flex-shrink:0; cursor:pointer; image-rendering:pixelated;">
         <div style="min-width:0;">
           <div id="qr-link" style="font-size:11px; color:#7fe3d6; word-break:break-all;"></div>
           <div style="font-size:11px; color:#666; margin-top:4px;">교인들이 이 QR을 스캔하면 셀폰에서 자막을 봅니다</div>
@@ -1141,15 +1141,17 @@
     let url = document.getElementById("tunnel-url").value.trim();
     if (!url) return;
     url = url.replace(/\/+$/, ""); // 끝 슬래시 제거
-    const mobileUrl = url + "/mobile";
+    // QR에는 짧은 주소(/m)를 담는다 — 칸이 적어야 카메라가 잘 읽는다 (40칸 → 37칸)
+    const mobileUrl = url + "/m";
     const qrImg = document.getElementById("qr-img");
-    // qzone(여백)이 없으면 스캔이 잘 안 된다. 크기도 넉넉히 받아 축소해 쓴다.
+    // qzone(여백)이 없으면 스캔이 잘 안 된다.
+    // 화면 크기(88px)의 정확히 2배로 받는다 — 어중간하게 줄이면 칸 경계가 흐려진다.
     // 1순위: api.qrserver.com, 실패 시 quickchart.io로 대체
     qrImg.onerror = function () {
       qrImg.onerror = null;
-      qrImg.src = "https://quickchart.io/qr?size=440&margin=2&text=" + encodeURIComponent(mobileUrl);
+      qrImg.src = "https://quickchart.io/qr?size=176&margin=2&text=" + encodeURIComponent(mobileUrl);
     };
-    qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=440x440&qzone=2&data="
+    qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=176x176&qzone=2&data="
       + encodeURIComponent(mobileUrl);
     document.getElementById("qr-link").textContent = mobileUrl;
     document.getElementById("qr-area").style.display = "block";

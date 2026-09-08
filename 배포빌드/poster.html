@@ -238,7 +238,7 @@
     document.getElementById("qr-url").textContent = mobileUrl;
   }
   fetch("/tunnel-url").then(r=>r.json()).then(d => {
-    if (d.url) makeQR(d.url.replace(/\/+$/,"") + "/mobile");
+    if (d.url) makeQR(d.url.replace(/\/+$/,"") + "/m");
   }).catch(()=>{});
 </script>
 

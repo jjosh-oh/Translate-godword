@@ -162,7 +162,7 @@
 
   fetch("/tunnel-url").then(r => r.json()).then(d => {
     if (d.url) {
-      const url = d.url.replace(/\/+$/, "") + "/mobile";
+      const url = d.url.replace(/\/+$/, "") + "/m";
       makeQR(url);
     }
   }).catch(() => {});

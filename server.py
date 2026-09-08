@@ -590,6 +590,7 @@ def operator():
 
 
 @app.route("/mobile")
+@app.route("/m")            # QR에 담는 주소를 짧게 하려고 둔 별명 (QR 칸 40→37)
 def mobile():
     return send_from_directory(".", "mobile.html")
 
