@@ -348,10 +348,15 @@
         <input type="text" id="map-ko" placeholder="한글 (예: 요한)" style="flex:1; min-width:0; background:var(--card-2); color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; outline:none;">
         <span style="color:var(--accent);">→</span>
         <input type="text" id="map-en" placeholder="번역 (예: John)" style="flex:1; min-width:0; background:var(--card-2); color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; outline:none;">
-        <button class="btn btn-start" onclick="addMapping()" style="flex-shrink:0;">추가</button>
+        <button class="btn btn-start" id="map-add-btn" onclick="addMapping()" style="flex-shrink:0;">추가</button>
       </div>
-      <span id="mapping-status" style="display:inline-block; margin-top:8px; font-size:12px; color:#666;">불러오는 중...</span>
-      <div id="mapping-list" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <span id="mapping-status" style="font-size:12px; color:#666;">불러오는 중...</span>
+        <button class="btn btn-gray" id="mapping-toggle" onclick="toggleMappingList()"
+                style="font-size:11px; padding:4px 9px;">목록 보기</button>
+      </div>
+      <!-- 등록된 것이 많아지면 화면을 다 차지하므로 접어둔다 -->
+      <div id="mapping-list" hidden style="margin-top:8px; display:flex; flex-direction:column; gap:5px;"></div>
       <!-- 그날 설교용 임시 대응표 — 1부에서 찾은 것을 2부에 쓰고, 그 주가 끝나면 비운다 -->
       <div id="mapping-weekly-wrap" hidden style="margin-top:10px; padding-top:9px; border-top:1px solid var(--border);">
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -825,20 +830,61 @@
       st.style.color = "#666";
     }
     const box = document.getElementById("mapping-list");
+    const toggle = document.getElementById("mapping-toggle");
+    toggle.textContent = box.hidden ? ("목록 보기 (" + data.count + ")") : "목록 숨기기";
+    toggle.hidden = data.count === 0;
     box.innerHTML = "";
     (data.items || []).forEach(function (it) {
-      const chip = document.createElement("span");
-      chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; background:var(--card-2); border:1px solid var(--border-strong); border-radius:16px; padding:4px 6px 4px 11px; font-size:12px; color:var(--text);";
-      chip.textContent = it.k + " → " + it.v;
-      const x = document.createElement("button");
-      x.textContent = "✕";
-      x.title = "삭제";
-      x.style.cssText = "border:none; background:transparent; color:#ff7a7a; cursor:pointer; font-size:12px; padding:0 2px;";
-      x.onclick = function () { removeMapping(it.k); };
-      chip.appendChild(x);
-      box.appendChild(chip);
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; align-items:center; gap:8px; background:var(--card-2);"
+        + "border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:12px;";
+      const txt = document.createElement("span");
+      txt.style.cssText = "flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+      // 값이 한글이면 번역 지정이 아니라 인식 교정이다. 구분해서 보여준다.
+      const isFix = /[가-힣]/.test(it.v);
+      txt.innerHTML = esc(it.k) + ' <span style="color:var(--text-3)">→</span> ' + esc(it.v)
+        + ' <span style="color:' + (isFix ? "var(--warn)" : "var(--text-3)") + '; font-size:10px;">'
+        + (isFix ? "인식 교정" : "번역 지정") + '</span>';
+      row.appendChild(txt);
+      const edit = document.createElement("button");
+      edit.className = "btn btn-gray";
+      edit.style.cssText = "font-size:11px; padding:3px 8px; flex-shrink:0;";
+      edit.textContent = "수정";
+      edit.onclick = function () { startEditMapping(it.k, it.v); };
+      row.appendChild(edit);
+      const del = document.createElement("button");
+      del.className = "btn btn-gray";
+      del.style.cssText = "font-size:11px; padding:3px 8px; flex-shrink:0; color:#ff7a7a;";
+      del.textContent = "삭제";
+      del.onclick = function () {
+        if (confirm('"' + it.k + " → " + it.v + '" 를 지웁니다.')) removeMapping(it.k);
+      };
+      row.appendChild(del);
+      box.appendChild(row);
     });
     renderWeeklyMapping(data.weekly || []);
+  }
+
+  function toggleMappingList() {
+    const box = document.getElementById("mapping-list");
+    box.hidden = !box.hidden;
+    loadMappingInfo();
+  }
+
+  // 수정 — 입력칸에 불러온 뒤 저장하면 바뀐다. 한글 쪽을 고치면 옛 항목은 지워진다.
+  let editingKey = null;
+
+  function startEditMapping(k, v) {
+    editingKey = k;
+    document.getElementById("map-ko").value = k;
+    document.getElementById("map-en").value = v;
+    document.getElementById("map-add-btn").textContent = "수정 저장";
+    document.getElementById("map-ko").focus();
+  }
+
+  function endEditMapping() {
+    editingKey = null;
+    document.getElementById("map-add-btn").textContent = "추가";
   }
 
   async function loadMappingInfo() {
@@ -855,11 +901,20 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ korean: k, english: v })
       });
-      const data = await res.json();
+      let data = await res.json();
       if (data.error) { alert(data.error); return; }
+      // 수정에서 한글 쪽을 바꿨으면 옛 항목이 남으므로 지운다
+      if (editingKey && editingKey !== k) {
+        const r2 = await fetch("/remove-mapping", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ korean: editingKey })
+        });
+        data = await r2.json();
+      }
+      endEditMapping();
       renderMapping(data);
       ko.value = ""; en.value = ""; ko.focus();
-    } catch (e) { alert("추가 실패"); }
+    } catch (e) { alert("저장 실패"); }
   }
 
   // ── 예배 후 검토 ──
