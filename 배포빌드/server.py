@@ -1263,7 +1263,7 @@ def _stt_events_chirp3(src_code, audio_q, stop_flag):
                 break
 
 
-async def _gemini_live_loop(audio_q, stop_flag, out_q, api_key):
+async def _gemini_live_loop(src_code, audio_q, stop_flag, out_q, api_key):
     """Gemini Live 세션을 유지하며 (kind, text)를 out_q로 넘긴다.
 
     Live API는 asyncio 전용이고 이 프로그램의 나머지는 스레드+큐 구조다.
@@ -1288,9 +1288,14 @@ async def _gemini_live_loop(audio_q, stop_flag, out_q, api_key):
 
     threading.Thread(target=feeder, daemon=True).start()
 
+    # 언어를 반드시 고정한다. 비워 두면 자동 감지로 돌아서, 한국어 발화의
+    # 앞부분을 일본어로 찍는 일이 생긴다(실제로 겪음 — 입력에 'かきれ'가 찍혔고
+    # Claude가 번역 대신 "이건 일본어입니다" 설명문을 자막으로 내보냈다).
+    # language_codes는 deprecated이므로 language_hints를 쓴다.
     config = types.LiveConnectConfig(
         response_modalities=["TEXT"],
-        input_audio_transcription=types.AudioTranscriptionConfig(),
+        input_audio_transcription=types.AudioTranscriptionConfig(
+            language_hints=types.LanguageHints(language_codes=[src_code])),
     )
 
     while not stop_flag["stop"]:
@@ -1376,7 +1381,7 @@ def _stt_events_gemini_live(src_code, audio_q, stop_flag):
     out_q = queue.Queue()
 
     def runner():
-        asyncio.run(_gemini_live_loop(audio_q, stop_flag, out_q, api_key))
+        asyncio.run(_gemini_live_loop(src_code, audio_q, stop_flag, out_q, api_key))
 
     threading.Thread(target=runner, daemon=True).start()
 
