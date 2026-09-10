@@ -302,6 +302,11 @@
   const audioQueue = [];   // base64 문자열 대기열
   let playing = false;
   let currentSource = null;   // 현재 재생 중인 오디오 (끄기용)
+  // 재생 세대. stopPlayback을 부를 때마다 올라간다.
+  // 디코딩은 비동기라, 멈춘 뒤에 끝난 옛 디코딩이 소리를 시작해 버리면
+  // currentSource가 덮어써져 '끄기'로 멈출 수 없는 소리가 남는다.
+  // (실제로 겪음 — 한국어는 꺼지고 영어가 계속 나왔다)
+  let playGen = 0;
   const MAX_QUEUE = 4;        // 실시간 유지: 밀리면 오래된 것부터 버려 자막과 맞춤
 
   function ensureAudioCtx() {
@@ -316,6 +321,7 @@
   }
 
   function stopPlayback() {
+    playGen++;                 // 진행 중이던 디코딩을 무효로 만든다
     audioQueue.length = 0;
     if (currentSource) {
       try { currentSource.onended = null; currentSource.stop(0); } catch (e) {}
@@ -355,6 +361,7 @@
   }
 
   function playNext() {
+    const myGen = playGen;     // 이 줄기의 세대. 도중에 멈추면 달라진다.
     const b64 = audioQueue.shift();
     if (!b64) { playing = false; currentSource = null; return; }
     playing = true;
@@ -366,17 +373,23 @@
     ctx.decodeAudioData(
       arr,
       (audioBuf) => {
-        if (!voiceOn) { playing = false; currentSource = null; return; }  // 그새 꺼졌으면 중단
+        // 그새 꺼졌거나(voiceOn) 멈췄으면(myGen) 소리를 시작하지 않는다
+        if (myGen !== playGen) return;
+        if (!voiceOn) { playing = false; currentSource = null; return; }
         try {
           const src = ctx.createBufferSource();
           src.buffer = audioBuf;
           src.connect(ctx.destination);
           currentSource = src;
-          src.onended = () => { currentSource = null; playNext(); };
+          src.onended = () => {
+            if (myGen !== playGen) return;   // 멈춘 뒤 끝난 것이면 이어가지 않는다
+            currentSource = null;
+            playNext();
+          };
           src.start(0);
-        } catch (e) { playNext(); }
+        } catch (e) { if (myGen === playGen) playNext(); }
       },
-      () => { playNext(); }           // 디코딩 실패 시 다음 것으로
+      () => { if (myGen === playGen) playNext(); }   // 디코딩 실패 시 다음 것으로
     );
   }
 
