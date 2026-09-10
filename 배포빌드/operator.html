@@ -674,6 +674,8 @@
       renderInputPreview(msg.data);
     } else if (msg.type === "cost_warn") {
       showCostWarn(msg.data);
+    } else if (msg.type === "tts_error") {
+      showTtsWarn(msg.data);
     } else if (msg.type === "stt_error") {
       const ip = document.getElementById("input-preview");
       ip.innerHTML = '<span style="color:#f44336">⚠ 음성인식 오류: ' + msg.data + '</span>';
@@ -1237,6 +1239,15 @@
   // 누르기 전에는 사라지지 않는다.
   function showCostWarn(text) {
     const bar = warnBar("cost-warn", "⚠ " + text + "  (눌러서 닫기)", "#b71c1c");
+    bar.style.cursor = "pointer";
+    bar.title = "눌러서 닫기";
+    bar.onclick = () => bar.remove();
+  }
+
+  // 번역 음성 실패 경고 — 켰는데 소리가 안 나는 이유를 바로 알 수 있게.
+  // 예전에는 콘솔 창에만 찍혀서, 창 없는 .exe에서는 알 방법이 없었다.
+  function showTtsWarn(text) {
+    const bar = warnBar("tts-warn", "⚠ " + text + "  (눌러서 닫기)", "#ef6c00");
     bar.style.cursor = "pointer";
     bar.title = "눌러서 닫기";
     bar.onclick = () => bar.remove();

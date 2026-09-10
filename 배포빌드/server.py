@@ -575,6 +575,10 @@ def translate_and_stream(text: str, target_lang: str, source_lang: str, is_prima
 _tts_client = None
 
 
+# 번역 음성 실패를 운영자에게 알린 마지막 시각 (같은 오류가 문장마다 나므로 제한)
+_tts_warn_at = [0.0]
+
+
 def _get_tts_client():
     global _tts_client
     if _tts_client is None:
@@ -599,7 +603,22 @@ def _tts_and_broadcast(text, target_lang):
         # is_primary=False → 송출창(대표 구독)엔 안 가고 해당 언어 셀폰에만 전달
         hub.publish(target_lang, ("__audio__", b64), is_primary=False)
     except Exception as e:
-        print("TTS 오류:", str(e)[:200])
+        detail = str(e)[:200]
+        print("TTS 오류:", detail)
+        # print는 창 없는 .exe에서 사라진다. 그래서 "번역 음성을 켰는데 조용한 것"과
+        # "켜졌는데 고장난 것"이 화면상 똑같아 보였다(실제로 겪음 — Google Cloud 키가
+        # 없어 문장마다 실패하는데 운영자는 알 수 없었다).
+        # 문장마다 같은 오류가 나므로 30초에 한 번만 알린다.
+        import time as _t
+        if _t.time() - _tts_warn_at[0] >= 30.0:
+            _tts_warn_at[0] = _t.time()
+            if "credential" in detail.lower():
+                warn = ("번역 음성을 만들지 못했습니다 — Google Cloud 키가 없거나 "
+                        "잘못되었습니다. 설정 화면에서 확인하십시오.")
+            else:
+                warn = "번역 음성을 만들지 못했습니다 — " + detail[:90]
+            operator_queue.put(("tts_error", warn))
+            _log_diag("tts_error", warn, min_gap=30.0)
 
 
 # ===== 번역 작업 큐 (문장 단위 번역을 순서대로 처리) =====
