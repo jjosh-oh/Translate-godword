@@ -238,6 +238,13 @@
   }
 
   function connect() {
+    // 이미 연결돼 있거나 연결 중이면 새로 만들지 않는다.
+    // /settings 응답을 기다리는 동안 교인이 언어를 바꾸면 switchLang이 먼저
+    // 연결하는데, 뒤늦게 응답이 와서 또 연결하면 소켓이 둘이 되어
+    // 두 언어의 자막과 음성이 함께 들어온다. (ngrok을 거치면 응답이 느려 잘 걸린다)
+    // switchLang은 ws를 null로 두고 부르므로 일부러 하는 재연결은 막히지 않는다.
+    if (ws && (ws.readyState === WebSocket.CONNECTING
+               || ws.readyState === WebSocket.OPEN)) return;
     const sock = new WebSocket(wsUrl());
     ws = sock;
 
@@ -260,6 +267,9 @@
     };
 
     sock.onmessage = (e) => {
+      // 언어 전환으로 교체된 옛 소켓이면 무시한다. 닫히는 데 시간이 걸리고
+      // (서버도 최대 10초까지 그 자리를 살려 둔다) 그동안 옛 언어가 섞여 들어온다.
+      if (ws !== sock) return;
       const msg = JSON.parse(e.data);
       if (msg.type === "ping") return;
       if (msg.type === "settings") {
@@ -375,6 +385,7 @@
     currentLang = lang;
     langInitialized = true;
     refreshUiText();
+    stopPlayback();        // 이미 받아 둔 옛 언어 음성이 이어서 나오지 않게
     lines = [];
     currentText = "";
     subtitles.innerHTML = '<div id="empty">' + t("changed") + '</div>';
