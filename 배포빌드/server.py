@@ -1550,6 +1550,12 @@ def audio_socket(ws):
                       % (DEDUP_SEC, s[:40]), min_gap=30.0)
             return
         recent_sent.append((s, now))
+        # 확정된 문장을 운영자 화면 '인식' 칸에도 보낸다.
+        # 예전에는 kind == "final" 일 때만 보냈는데, Gemini Live 경로는 final을
+        # 한 번도 내보내지 않는다(interim·speech_end·stream_start만 쓴다).
+        # 그래서 인식 칸에 완성 문장이 영영 안 쌓이고 '진행 중' 줄만 보였다.
+        # 여기서 보내면 어느 엔진이든 번역 칸과 같은 단위로 쌓인다.
+        operator_queue.put(("input", s))
         enqueue_translation(s, source_name, my_session)
 
     seg = Segmenter(_time.time())
@@ -1563,7 +1569,8 @@ def audio_socket(ws):
             for s in seg.on_speech_end(now):
                 send(s)
         elif kind == "final":
-            operator_queue.put(("input", text.strip()))
+            # 인식 칸으로는 send()가 문장 단위로 보낸다. 여기서 또 보내면
+            # V1에서 같은 내용이 두 번 뜬다.
             for s in seg.on_final(text, now):
                 send(s)
         elif kind == "interim":
