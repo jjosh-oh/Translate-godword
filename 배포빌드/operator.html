@@ -621,14 +621,24 @@
       d.textContent = t;
       ip.appendChild(d);
     });
+    // 완성된 문장만으로 먼저 칸에 맞춘다.
+    // 예전에는 '진행 중' 줄을 넣은 뒤에 맞춰서, 그 줄의 높이만큼 완성 문장이
+    // 배열에서 영구히 지워졌다. 진행 중 글은 0.5초마다 계속 다시 오므로
+    // 삭제가 반복되어 인식 칸에는 두 줄밖에 안 남았다(번역 칸은 스트리밍 줄이
+    // 짧아 거의 안 깎여서 10줄이 남았다 — 그 차이가 증상이었다).
+    trimTop(ip, inputLines);
     if (interim) {
       const d = document.createElement("div");
       d.style.color = "#777";
       d.style.fontStyle = "italic";
-      d.textContent = interim + " …";
+      // 진행 중인 글은 '그 턴 전체'가 누적돼 온다(Gemini Live). 앞부분은 이미
+      // 위에 완성 문장으로 나와 있어 중복이므로 뒤쪽만 보여준다.
+      const TAIL = 60;
+      d.textContent = (interim.length > TAIL ? "… " + interim.slice(-TAIL)
+                                             : interim) + " …";
+      d.style.flexShrink = "0";
       ip.appendChild(d);
     }
-    trimTop(ip, inputLines);
   }
 
   // 번역 미리보기: 완성 번역들 누적 + 맨 아래 현재 번역(스트리밍)
