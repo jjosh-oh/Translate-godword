@@ -269,6 +269,22 @@ TTS_LANG = {
     "German": "de-DE", "Arabic": "ar-XA",
 }
 
+# 번역 음성 — 남성으로 고정한다. 설교자가 남성이라 여성 음성은 어색하다는
+# 요청이 있었다.
+#
+# 성별(ssml_gender)만 주지 않고 음성 이름을 직접 적는 이유:
+# 성별만 주면 구글이 어떤 음성을 고르는지 정할 수 없다(실측 — 바이트를 대조해
+# 보니 Standard·Neural2 어느 것과도 맞지 않았다). 유료 음성이 걸리면 요금이
+# 붙는다. Standard는 월 400만 자까지 무료이고 8개 언어 전부 남성 음성이 있다.
+#
+# 이름이 없는 언어는 성별만 지정해 동작은 계속되게 한다.
+TTS_VOICE = {
+    "en-US": "en-US-Standard-D", "ko-KR": "ko-KR-Standard-C",
+    "ja-JP": "ja-JP-Standard-C", "cmn-CN": "cmn-CN-Standard-B",
+    "es-ES": "es-ES-Standard-E", "fr-FR": "fr-FR-Standard-G",
+    "de-DE": "de-DE-Standard-H", "ar-XA": "ar-XA-Standard-B",
+}
+
 last_input = ""
 last_output = ""
 sermon_context = ""  # 업로드된 설교 자료
@@ -595,7 +611,10 @@ def _tts_and_broadcast(text, target_lang):
         code = TTS_LANG.get(target_lang, "en-US")
         resp = _get_tts_client().synthesize_speech(
             input=texttospeech.SynthesisInput(text=text),
-            voice=texttospeech.VoiceSelectionParams(language_code=code),
+            voice=texttospeech.VoiceSelectionParams(
+                language_code=code,
+                name=TTS_VOICE.get(code, ""),
+                ssml_gender=texttospeech.SsmlVoiceGender.MALE),
             audio_config=texttospeech.AudioConfig(
                 audio_encoding=texttospeech.AudioEncoding.MP3),
         )
