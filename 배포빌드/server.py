@@ -1523,6 +1523,15 @@ def audio_socket(ws):
         engine, _stt_events_v1)(src_code, audio_q, stop_flag)
     operator_queue.put(("stt_engine", engine))
 
+    # 같은 문장이 짧은 시간 안에 다시 오면 거른다.
+    # Segmenter에도 중복 방지가 있지만 stream_start마다 새로 만들어져 초기화된다.
+    # Gemini Live는 턴이 바뀔 때 stream_start를 부르므로, 그 자리에서 같은
+    # 문장이 두 번 나갔다(실측: 교회 PC에서 2~3초 간격 중복, 로그 7,678줄 중 15건).
+    # 교인 화면에 같은 자막이 두 번 뜨고 번역 요금도 두 배로 든다.
+    # 이 목록은 마이크 세션 동안 유지되므로 stream_start에 영향받지 않는다.
+    DEDUP_SEC = 5.0
+    recent_sent = []          # [(문장, 보낸 시각)]
+
     def send(s):
         # 원어가 한국어인데 한글도 영숫자도 한 자 없는 조각은 보내지 않는다.
         # 인식기가 드물게 다른 언어 문자를 낸다(예: かきれ). 마침표만 남는
@@ -1533,6 +1542,14 @@ def audio_socket(ws):
         # 숫자만 있는 조각("2010")은 정상이므로 통과시킨다.
         if source_name == "Korean" and not _KO_TEXT.search(s):
             return
+        now = _time.time()
+        recent_sent[:] = [(t, at) for t, at in recent_sent if now - at < DEDUP_SEC]
+        if any(t == s for t, at in recent_sent):
+            _log_diag("dup_skip",
+                      "같은 문장이 %.0f초 안에 다시 와서 건너뜀: %s"
+                      % (DEDUP_SEC, s[:40]), min_gap=30.0)
+            return
+        recent_sent.append((s, now))
         enqueue_translation(s, source_name, my_session)
 
     seg = Segmenter(_time.time())
