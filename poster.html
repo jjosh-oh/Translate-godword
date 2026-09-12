@@ -59,8 +59,6 @@
     .langs li.on{ color:var(--blue); font-weight:800; }
     .langs li.on .dot{ border-color:var(--blue); background:var(--blue); box-shadow:inset 0 0 0 3px #fff; }
 
-    .phone-ill{ display:flex; justify-content:center; margin-bottom:6px; }
-    .phone-ill svg{ width:150px; height:150px; }
     .s3card{ background:var(--lt); border-radius:14px; padding:16px 18px; }
     .s3card .hd{ background:var(--blue); color:#fff; font-weight:800; font-size:15px; padding:8px 12px; border-radius:10px; display:inline-block; margin-bottom:10px; }
     .s3card p{ font-size:15px; color:var(--ink); line-height:1.5; }
@@ -107,7 +105,7 @@
   </div>
 
   <div class="title">
-    <h1 id="title-main">KOREAN → ENGLISH<br>SIMULTANEOUS TRANSLATION SERVICE</h1>
+    <h1 id="title-main">KOREAN → YOUR LANGUAGE<br>SIMULTANEOUS TRANSLATION SERVICE</h1>
     <div class="ko">설교를 원하는 언어의 실시간 자막으로 보세요</div>
   </div>
 
@@ -148,22 +146,21 @@
     </div>
 
     <div class="col">
-      <div class="phone-ill">
-        <svg viewBox="0 0 120 120" fill="none">
-          <rect x="34" y="12" width="52" height="96" rx="9" fill="#eaf0fb" stroke="#3f63c9" stroke-width="2.5"/>
-          <rect x="42" y="26" width="36" height="6" rx="3" fill="#3f63c9"/>
-          <rect x="42" y="40" width="30" height="5" rx="2.5" fill="#9db2e6"/>
-          <rect x="42" y="52" width="36" height="5" rx="2.5" fill="#9db2e6"/>
-          <rect x="42" y="64" width="26" height="5" rx="2.5" fill="#9db2e6"/>
-          <circle cx="60" cy="96" r="4" fill="#3f63c9"/>
-        </svg>
-      </div>
       <div class="step-no">3</div>
       <div class="step-t">Read real-time translation</div>
       <div class="s3card">
         <span class="hd">REAL-TIME CAPTIONS</span>
         <p>Read the translation of the sermon on your phone as it is spoken.</p>
-        <div class="li">· Text captions — no earphones needed.</div>
+        <div class="li">· 자막만 보셔도 됩니다 · Captions alone are enough.</div>
+      </div>
+
+      <div class="step-no" style="margin-top:16px;">4</div>
+      <div class="step-t">Listen, if you prefer</div>
+      <div class="s3card">
+        <span class="hd">🔊 TRANSLATED VOICE</span>
+        <p>화면 위쪽 <b>🔇</b> 를 눌러 <b>🔊</b> 로 바꾸면 귀로도 들을 수 있습니다.<br>
+        <span style="font-size:0.88em; color:var(--ink-2)">Tap <b>🔇</b> at the top to switch it to <b>🔊</b>.</span></p>
+        <div class="li">· 주변을 위해 <b>이어폰</b>을 써 주세요 · Please use earphones.</div>
       </div>
     </div>
   </div>
@@ -223,9 +220,14 @@
 
   // ── 제목·언어 강조: 서버 설정(원본→번역 언어) 반영 ──
   fetch("/settings").then(r=>r.json()).then(s => {
-    const src = (s.source_lang || "Korean"), tgt = (s.target_lang || "English");
+    const src = (s.source_lang || "Korean");
+    // 포스터는 교인이 보는 것이다. 운영자가 고른 대표 언어가 아니라
+    // "원하는 언어"라고 적는다. (대표가 한국어면 KOREAN → KOREAN으로 나오던 문제)
     document.getElementById("title-main").innerHTML =
-      src.toUpperCase() + " → " + tgt.toUpperCase() + "<br>SIMULTANEOUS TRANSLATION SERVICE";
+      src.toUpperCase() + " → YOUR LANGUAGE<br>SIMULTANEOUS TRANSLATION SERVICE";
+    // 아래 알약·목록은 보기일 뿐이다 — 원어와 같으면 영어로 보인다
+    let tgt = (s.target_lang || "English");
+    if (tgt === src) tgt = "English";
     document.getElementById("pill-src").textContent = LANG_CODE[src] || src.slice(0,2).toUpperCase();
     document.getElementById("pill-tgt").textContent = LANG_CODE[tgt] || tgt.slice(0,2).toUpperCase();
     // 대표 언어를 목록에서 강조
