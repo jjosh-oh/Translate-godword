@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>주보 삽입용 통역 안내문</title>
+<!--
+  주보에 넣는 작은 안내 상자 (100mm × 53mm)
+  ─────────────────────────────────────────
+  · 손으로 고치지 마세요. 개발도구\교회홈페이지_안내만들기.py 가 이 파일을 읽어
+    주보안내문.png / 주보안내문.pdf 를 만듭니다.
+  · QR은 교회 홈페이지(saeroun.org/translate)를 가리킵니다.
+    접속 주소(ngrok)가 바뀌어도 이미 인쇄된 주보의 QR이 죽지 않게 하려는 것입니다.
+  · 글이 상자 밖으로 넘치는지 확인하려면 이 파일을 브라우저로 열어 보세요.
+-->
+<style>
+  @page { size: 100mm 53mm; margin: 0; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100mm; height:53mm; overflow:hidden; }
+  body {
+    font-family:'Malgun Gothic','맑은 고딕','Pretendard','Apple SD Gothic Neo',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    color:#1a2230; background:#fff;
+    display:flex; gap:3.4mm; align-items:stretch;
+    padding:3.2mm 3.6mm;
+    border:0.35mm solid #1b2a63; border-radius:1.6mm;
+  }
+
+  /* 왼쪽 — QR */
+  .left { flex:0 0 24mm; display:flex; flex-direction:column; align-items:center; }
+  .left img { width:24mm; height:24mm; display:block; }
+  .left .url { margin-top:1mm; font-size:5.4pt; font-weight:700; color:#3f63c9;
+               text-align:center; line-height:1.2; }
+  .left .scan { margin-top:1.4mm; font-size:5pt; color:#8089a0; text-align:center; line-height:1.25; }
+
+  /* 오른쪽 — 글 */
+  .right { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .ttl { font-size:9pt; font-weight:800; color:#1b2a63; line-height:1.15; letter-spacing:-0.03em;
+         white-space:nowrap; }
+  .ttl-en { font-size:5.9pt; font-weight:700; color:#3f63c9; margin-top:0.6mm;
+            letter-spacing:0.02em; white-space:nowrap; }
+  .lead { font-size:5.4pt; color:#7b8694; margin-top:0.9mm; line-height:1.3; }
+
+  .rule { height:0.2mm; background:#d9dfe5; margin:1.5mm 0 1.5mm; }
+
+  ol { list-style:none; }
+  li { font-size:6pt; line-height:1.25; margin-bottom:1.1mm; padding-left:4mm; position:relative; }
+  li .n { position:absolute; left:0; top:0; width:3mm; height:3mm; border-radius:50%;
+          background:#1b2a63; color:#fff; font-size:4.4pt; font-weight:700;
+          display:flex; align-items:center; justify-content:center; }
+  li .en { display:block; font-size:5.4pt; color:#8089a0; line-height:1.2; margin-top:0.2mm; }
+
+  .foot { margin-top:auto; font-size:5.2pt; color:#6b5a1e; background:#fff8e6;
+          border:0.2mm solid #f0dda6; border-radius:1mm; padding:0.9mm 1.4mm; line-height:1.35; }
+  .foot b { color:#4a3d0f; }
+</style>
+</head>
+<body>
+
+  <div class="left">
+    <img src="__QR_PAGE__" alt="QR">
+    <div class="url">saeroun.org<br>/translate</div>
+    <div class="scan">휴대폰 카메라로<br>비추세요</div>
+  </div>
+
+  <div class="right">
+    <div class="ttl">설교를 내 언어로 — 실시간 자막</div>
+    <div class="ttl-en">LIVE SERMON TRANSLATION ON YOUR PHONE</div>
+    <div class="lead">English · 日本語 · 中文 · Español · Français · Deutsch · العربية</div>
+
+    <div class="rule"></div>
+
+    <ol>
+      <li><span class="n">1</span>QR을 찍어 안내 화면을 여세요
+        <span class="en">Scan the code to open the guide page</span></li>
+      <li><span class="n">2</span>언어를 고르세요
+        <span class="en">Choose your language</span></li>
+      <li><span class="n">3</span>설교 자막이 실시간으로 나옵니다
+        <span class="en">Subtitles appear live on your phone</span></li>
+      <li><span class="n">4</span>소리로 듣고 싶으면 <b>🔊</b> 를 누르고 <b>이어폰</b>을 꽂으세요
+        <span class="en">To listen, tap <b>🔊</b> and use <b>earphones</b> — subtitles alone need none</span></li>
+    </ol>
+
+    <div class="foot"><b>예배 중에만 연결됩니다.</b> 자세한 안내는 QR로.<br>
+      <b>Works during the service only.</b> Full guide via the QR code.</div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,180 @@
+<meta charset="utf-8">
+<!--
+  새로운개혁교회 · 실시간 통역 자막 안내 (교회 홈페이지용)
+  ─────────────────────────────────────────────────────────────
+  · 이 파일은 손으로 고치지 마세요. 원본은 교회홈페이지\_template.html 이고,
+    개발도구\교회홈페이지_안내만들기.py 를 실행하면 이 파일이 새로 만들어집니다.
+  · 워드프레스 페이지의 [사용자 정의 HTML] 블록에 통째로 붙여넣습니다.
+  · CSS가 전부 #lw-guide 안에만 걸려 있어 홈페이지 디자인을 건드리지 않습니다.
+  · 한글과 영문을 함께 보여 줍니다. 영문은 한글 바로 아래 작은 글씨로 붙습니다.
+-->
+<div id="lw-guide">
+<style>
+#lw-guide{--navy:#1b2a63;--blue:#3f63c9;--ink:#1a2230;--ink2:#5a6472;--line:#d9dfe5;--bg:#eef1f4;
+  display:block;box-sizing:border-box;width:100%;
+  font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif;
+  color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased;
+  background:var(--bg);padding:24px 16px;border-radius:14px}
+#lw-guide *,#lw-guide *::before,#lw-guide *::after{box-sizing:border-box;margin:0;padding:0;font-family:inherit}
+#lw-guide .sheet{background:#fff;max-width:880px;margin:0 auto;border-radius:14px;
+  padding:20px 20px 32px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+#lw-guide .inner{max-width:620px;margin:0 auto;padding:0 8px}
+
+#lw-guide .poster{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
+
+/* 영문은 한글 바로 아래 한 단계 작고 흐리게 */
+#lw-guide .en{display:block;font-size:13px;font-weight:400;color:#7b8694;line-height:1.5;margin-top:3px}
+
+/* 종이에는 누를 단추가 없다. 1번 설명을 화면용·인쇄용으로 나눠 둔다. */
+#lw-guide .print-only{display:none}
+
+#lw-guide .go{display:block;margin:22px auto 0;max-width:380px;text-align:center;text-decoration:none;
+  background:var(--blue);color:#fff;font-size:18px;font-weight:700;padding:15px 20px;border-radius:12px;
+  box-shadow:0 3px 14px rgba(63,99,201,.32);line-height:1.35}
+#lw-guide .go:hover{background:#3555b6;color:#fff}
+#lw-guide .go .en{color:rgba(255,255,255,.93);font-size:15px;font-weight:600;margin-top:2px}
+#lw-guide .go small{display:block;font-size:12.5px;font-weight:500;color:rgba(255,255,255,.85);margin-top:7px}
+
+#lw-guide .qr-wrap{text-align:center;margin:20px 0 0}
+#lw-guide .qr-wrap img{width:150px;height:auto;display:inline-block;
+  border:1px solid var(--line);border-radius:10px;padding:8px;background:#fff}
+#lw-guide .qr-url{margin-top:10px;font-size:13.5px;color:var(--blue);font-weight:600;
+  overflow-wrap:anywhere;line-height:1.4}
+#lw-guide .qr-hint{margin-top:5px;font-size:12px;color:var(--ink2)}
+#lw-guide .qr-hint .en{font-size:12px;margin-top:1px}
+
+#lw-guide .when{margin:22px 0 0;background:#fff8e6;border:1px solid #f0dda6;border-radius:12px;
+  padding:15px 18px;font-size:13.5px;color:#6b5a1e;line-height:1.7}
+#lw-guide .when b{color:#4a3d0f}
+#lw-guide .when .en{color:#8a7736;font-size:13px;margin-top:8px;padding-top:8px;border-top:1px solid #f0dda6}
+
+#lw-guide .steps{border-top:1px solid var(--line);margin-top:28px;padding-top:26px}
+#lw-guide .step{display:flex;gap:14px;align-items:flex-start;margin-bottom:20px}
+#lw-guide .num{flex:0 0 32px;width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;
+  font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center}
+#lw-guide .step h3{font-size:16.5px;font-weight:600;margin-bottom:4px;color:var(--ink);border:0;line-height:1.35}
+#lw-guide .step h3 .en{font-size:13.5px;font-weight:500}
+#lw-guide .step p{font-size:14px;color:var(--ink2)}
+#lw-guide .step b{color:var(--ink);font-weight:600}
+#lw-guide .tag{display:inline-block;background:rgba(63,99,201,.12);color:var(--blue);font-size:11px;
+  font-weight:600;padding:1px 8px;border-radius:10px;margin-left:6px;vertical-align:2px}
+
+#lw-guide .tips{margin-top:6px;background:#f5f7f9;border-radius:12px;padding:16px 20px;
+  font-size:13px;color:var(--ink2);line-height:1.8}
+#lw-guide .tips b{color:var(--ink);font-weight:600}
+#lw-guide .tips .en{font-size:12.5px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);line-height:1.75}
+
+/* 인쇄 (통역안내.pdf도 이 규칙으로 만들어진다) */
+@page { size: letter; margin: 13mm 14mm; }   /* 미국 기준 — A4 아님 */
+@media print{
+  #lw-guide{background:#fff;padding:0;border-radius:0;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #lw-guide .sheet{box-shadow:none;max-width:100%;padding:0;border-radius:0}
+  #lw-guide .inner{max-width:100%;padding:0}
+  #lw-guide .go{display:none}          /* 종이에서는 누를 수 없다 */
+  #lw-guide .screen-only{display:none}
+  #lw-guide .print-only{display:inline}
+  #lw-guide .poster{border:0;max-width:148mm;margin:0 auto}
+  #lw-guide .qr-wrap{margin-top:12px}
+  #lw-guide .qr-wrap img{width:29mm;padding:4px}
+  #lw-guide .when{margin-top:12px;padding:12px 15px}
+  #lw-guide .steps{margin-top:14px;padding-top:14px}
+  #lw-guide .step{margin-bottom:13px}
+  #lw-guide .tips{padding:13px 16px}
+  #lw-guide .step,#lw-guide .when,#lw-guide .tips{break-inside:avoid; page-break-inside:avoid}
+}
+
+@media (max-width:560px){
+  #lw-guide{padding:0;background:transparent;border-radius:0}
+  #lw-guide .sheet{padding:14px 12px 24px;box-shadow:none;border:1px solid var(--line)}
+  #lw-guide .inner{padding:0}
+  #lw-guide .go{font-size:17px}
+  #lw-guide .go .en{font-size:14px}
+  #lw-guide .qr-url{font-size:12.5px}
+}
+</style>
+
+<div class="sheet">
+
+  <img class="poster" src="__POSTER__" alt="실시간 통역 자막 안내 포스터 / Live translation service poster">
+  <div class="inner">
+
+    <a class="go" href="__URL__" target="_blank" rel="noopener">
+      휴대폰으로 바로 열기
+      <span class="en">Open on my phone</span>
+      <small>예배 중에 눌러 주세요 · Tap during the service</small>
+    </a>
+
+    <div class="qr-wrap">
+      <img src="__QR__" alt="접속 QR코드 / Access QR code">
+      <div class="qr-url">__URL__</div>
+      <div class="qr-hint">컴퓨터로 보고 계시면 휴대폰 카메라로 QR을 비추세요
+        <span class="en">On a computer? Point your phone's camera at the QR code</span>
+      </div>
+    </div>
+
+    <div class="when">
+      <b>예배 시간에만 연결됩니다.</b><br>
+      주일 1부 오전 9:30 · 2부 오전 11:00 (레오니아 하이스쿨 강당)<br>
+      예배 전이나 끝난 뒤에 누르면 화면이 열리지 않습니다.
+      <span class="en"><b>Available during worship services only.</b><br>
+        Sunday 9:30 AM and 11:00 AM (Leonia High School auditorium)<br>
+        The page will not open before or after the service.</span>
+    </div>
+
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div>
+        <h3><span class="screen-only">QR코드를 비추거나 단추를 누르세요</span><span class="print-only">QR코드를 비추세요</span>
+          <span class="en"><span class="screen-only">Scan the QR code, or tap the button</span><span class="print-only">Scan the QR code</span></span></h3>
+        <p>휴대폰 카메라 앱을 열어 QR코드를 비추면 링크가 나타납니다.<span class="screen-only"> 이 화면을 휴대폰으로 보고 계시다면 위의 파란 단추를 누르세요.</span>
+          <span class="en">Open your phone's camera and point it at the QR code.<span class="screen-only"> If you are already reading this on your phone, just tap the blue button above.</span></span>
+        </p>
+      </div></div>
+
+      <div class="step"><div class="num">2</div><div>
+        <h3>첫 화면에서 Visit Site를 누르세요<span class="en">Press Visit Site on the first screen</span></h3>
+        <p><b>처음 접속하면 영어 안내 화면이 한 번 나옵니다. 파란 <span style="white-space:nowrap">Visit Site</span> 단추를 누르시면 됩니다.</b> (다음부터는 나오지 않습니다)
+          <span class="en"><b>The first time, an English notice page appears. Just press the blue <span style="white-space:nowrap">Visit Site</span> button.</b> (It will not appear again.)</span>
+        </p>
+      </div></div>
+
+      <div class="step"><div class="num">3</div><div>
+        <h3>언어를 선택하세요<span class="en">Choose your language</span></h3>
+        <p>화면 위쪽의 언어 단추로 원하는 언어를 고르세요. 사람마다 각자 다른 언어로 볼 수 있습니다. (영어·한국어·일본어·중국어·스페인어·프랑스어·독일어·아랍어)
+          <span class="en">Use the language buttons at the top of the screen. Everyone can choose a different language. (English, Korean, Japanese, Chinese, Spanish, French, German, Arabic)</span>
+        </p>
+      </div></div>
+
+      <div class="step"><div class="num">4</div><div>
+        <h3>자막을 확인하세요<span class="en">Read the subtitles</span></h3>
+        <p>설교가 시작되면 말씀이 실시간으로 번역되어 화면에 표시됩니다. 이어폰은 필요 없습니다.
+          <span class="en">Once the sermon begins, the message is translated and displayed in real time. No earphones needed.</span>
+        </p>
+      </div></div>
+
+      <div class="step"><div class="num">5</div><div>
+        <h3>소리로 듣고 싶다면<span class="tag">음성 · AUDIO</span><span class="en">To listen instead of reading</span></h3>
+        <p>화면 위쪽의 <b>🔇</b> 단추를 눌러 <b>🔊</b> 로 바꾸면 번역을 귀로도 들을 수 있습니다. 주변에 방해가 되지 않도록 <b>이어폰</b>을 사용해 주세요.
+          <span class="en">Tap <b>🔇</b> at the top of the screen to switch it to <b>🔊</b> and hear the translation. Please use <b>earphones</b> so others are not disturbed.</span>
+        </p>
+      </div></div>
+    </div>
+
+    <div class="tips">
+      <b>도움말</b><br>
+      · 글자가 작으면 화면 위쪽의 <b>＋ / －</b> 단추로 크기를 조절하세요.<br>
+      · 자막만 보셔도 됩니다. 이어폰은 <b>소리로 들을 때만</b> 필요합니다.<br>
+      · <b>🔊</b> 로 바꿨는데 소리가 안 나면 아직 음성이 준비되지 않은 것입니다. 안내 위원에게 말씀해 주세요.<br>
+      · 아이폰은 <b>무음 스위치를 켜 두어도</b> 소리가 납니다.<br>
+      · 접속이 안 되면 와이파이 또는 데이터가 켜져 있는지 확인하세요.
+      <span class="en"><b>Tips</b><br>
+        · Use the <b>＋ / －</b> buttons at the top to change the text size.<br>
+        · Subtitles alone are fine — earphones are needed <b>only for audio</b>.<br>
+        · If <b>🔊</b> is on but you hear nothing, the audio is not ready yet. Please ask an usher.<br>
+        · On iPhone, sound plays <b>even with the silent switch on</b>.<br>
+        · If the page will not open, check that Wi-Fi or mobile data is turned on.</span>
+    </div>
+  </div>
+
+</div>
+</div>

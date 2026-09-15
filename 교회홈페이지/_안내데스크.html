@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>안내데스크 비치용 통역 안내</title>
+<!--
+  안내데스크에 세워 두는 한 장짜리 안내 (letter 가로 279.4mm × 215.9mm)
+  ─────────────────────────────────────────────────────────────
+  · 손으로 고치지 마세요. 개발도구\교회홈페이지_안내만들기.py 가 이 파일을 읽어
+    안내데스크.pdf 를 만듭니다.
+  · 멀리서도 읽히도록 글자와 QR을 크게 잡았습니다. QR은 82mm — 한 발 떨어져서도 찍힙니다.
+  · QR은 교회 홈페이지(saeroun.org/translate)를 가리킵니다.
+    접속 주소(ngrok)가 바뀌어도 이미 인쇄해 둔 안내판이 죽지 않게 하려는 것입니다.
+-->
+<style>
+  @page { size: letter landscape; margin: 0; }   /* 미국 기준 — A4 아님 */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:279.4mm; height:215.9mm; overflow:hidden; }
+  body {
+    font-family:'Malgun Gothic','맑은 고딕','Pretendard','Apple SD Gothic Neo',sans-serif;
+    -webkit-font-smoothing:antialiased; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    color:#1a2230; background:#fff;
+    display:flex; flex-direction:column;
+  }
+
+  /* 위 띠 */
+  .band {
+    background:#1b2a63; color:#fff; flex:0 0 26mm;
+    display:flex; align-items:center; gap:7mm; padding:0 14mm;
+  }
+  .band .logo { background:#fff; border-radius:3mm; padding:2mm 3mm; display:flex; align-items:center; }
+  .band .logo img { height:14mm; display:block; }
+  .band h1 { font-size:20pt; font-weight:800; letter-spacing:-0.01em; }
+  .band .right { margin-left:auto; text-align:right; font-size:10pt; color:#aebbe6; line-height:1.45; }
+  .band .right b { display:block; color:#fff; font-size:11.5pt; font-weight:700; }
+
+  /* 가운데 */
+  .main { flex:1; display:flex; align-items:center; gap:14mm; padding:9mm 14mm 5mm; }
+
+  .qr { flex:0 0 88mm; text-align:center; }
+  .qr img { width:82mm; height:82mm; display:block; margin:0 auto;
+            border:0.4mm solid #d9dfe5; border-radius:2mm; padding:2mm; }
+  .qr .url { margin-top:3.5mm; font-size:14pt; font-weight:800; color:#3f63c9; line-height:1.25; }
+  .qr .scan { margin-top:2.4mm; font-size:10.5pt; color:#5a6472; line-height:1.4; }
+
+  .body { flex:1; min-width:0; }
+  .ttl { font-size:28pt; font-weight:800; color:#3f63c9; line-height:1.15; letter-spacing:-0.02em; }
+  .ttl-ko { font-size:16.5pt; font-weight:700; color:#1b2a63; margin-top:2mm; letter-spacing:-0.02em; }
+  .langs { font-size:12pt; color:#5a6472; margin-top:3mm; line-height:1.5; }
+
+  .rule { height:0.3mm; background:#d9dfe5; margin:5mm 0 5mm; }
+
+  ol { list-style:none; }
+  li { position:relative; padding-left:10mm; margin-bottom:5.6mm; font-size:14.5pt; font-weight:700;
+       line-height:1.3; color:#1a2230; }
+  li .n { position:absolute; left:0; top:0.5mm; width:7mm; height:7mm; border-radius:50%;
+          background:#1b2a63; color:#fff; font-size:10.5pt; font-weight:700;
+          display:flex; align-items:center; justify-content:center; }
+  li .en { display:block; font-size:11.5pt; font-weight:400; color:#7b8694; line-height:1.3; margin-top:0.8mm; }
+
+  /* 아래 띠 */
+  .foot {
+    flex:0 0 17mm; background:#1b2a63; color:#fff;
+    display:flex; align-items:center; gap:8mm; padding:0 14mm; font-size:10.5pt; line-height:1.4;
+  }
+  .foot .note b { color:#fff; font-weight:700; }
+  .foot .note span { color:#aebbe6; }
+  .foot .web { margin-left:auto; font-size:13pt; font-weight:800; }
+</style>
+</head>
+<body>
+
+  <div class="band">
+    <div class="logo"><img src="__LOGO__" alt=""></div>
+    <h1>Saeroun Reformed Church</h1>
+    <div class="right"><b>실시간 통역 자막</b>Live Translated Subtitles</div>
+  </div>
+
+  <div class="main">
+    <div class="qr">
+      <img src="__QR_PAGE__" alt="QR">
+      <div class="url">saeroun.org/translate</div>
+      <div class="scan">휴대폰 카메라로 비추세요<br>Point your phone's camera here</div>
+    </div>
+
+    <div class="body">
+      <div class="ttl">FOLLOW THE SERMON<br>IN YOUR LANGUAGE</div>
+      <div class="ttl-ko">설교를 원하는 언어의 실시간 자막으로 보세요</div>
+      <div class="langs">English · 한국어 · 日本語 · 中文 · Español · Français · Deutsch · العربية</div>
+
+      <div class="rule"></div>
+
+      <ol>
+        <li><span class="n">1</span>QR을 찍어 안내 화면을 여세요
+          <span class="en">Scan the code to open the guide page</span></li>
+        <li><span class="n">2</span>언어를 고르세요
+          <span class="en">Choose your language</span></li>
+        <li><span class="n">3</span>설교 자막이 실시간으로 나옵니다
+          <span class="en">Subtitles appear live on your phone</span></li>
+        <li><span class="n">4</span>소리로 듣고 싶으면 <b>🔊</b> 를 누르고 <b>이어폰</b>을 꽂으세요
+          <span class="en">To listen, tap <b>🔊</b> and use <b>earphones</b> — subtitles alone need none</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="note"><b>예배 중에만 연결됩니다.</b> 도움이 필요하시면 안내 위원에게 말씀해 주세요.<br>
+      <span><b>Works during the service only.</b> Please ask an usher if you need help.</span></div>
+    <div class="web">www.saeroun.org</div>
+  </div>
+
+</body>
+</html>
