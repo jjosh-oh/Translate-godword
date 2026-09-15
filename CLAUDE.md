@@ -4,7 +4,7 @@
 Windows 데스크톱 프로그램. SAEROUN Reformed Church에서 매주 실제 예배에 사용 중이며,
 한 선교사에게 기부 예정.
 
-**현재 버전: v1.3** (`main`에 병합됨) · 저장소: `jjosh-oh/Translate-godword`
+**현재 버전: v1.4** (`main`에 병합됨) · 저장소: `jjosh-oh/Translate-godword`
 
 ---
 
