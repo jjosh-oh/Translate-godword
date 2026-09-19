@@ -81,10 +81,34 @@
     .lang-toggle a.on { background: var(--accent); color: #fff; font-weight: 600; }
 
     @media print {
+      /* letter 세로 한 장에 들어가게 한다. 여백 12mm를 빼면 쓸 수 있는 크기는
+         725 x 965px. 손대기 전에는 1,143px이라 178px이 넘쳤다.
+         화면으로 볼 때는 그대로 두고 인쇄할 때만 촘촘하게 한다. */
+      @page { size: letter portrait; margin: 12mm; }
       body { background: #fff; padding: 0; }
-      .sheet { box-shadow: none; max-width: 100%; border-radius: 0; padding: 20px 30px; }
+      .sheet { box-shadow: none; max-width: 100%; border-radius: 0; padding: 0 26px; }
       .print-btn, .lang-toggle { display: none; }
-      @page { margin: 12mm; }
+
+      .top { margin-bottom: 14px; }
+      h1 { font-size: 26px; }
+      .lead { font-size: 14px; margin-top: 7px; }
+
+      /* 가장 크게 줄어드는 곳. 180px도 휴대폰으로 읽기에 넉넉하다 */
+      #qr-img, #qr-fallback { width: 180px; height: 180px; }
+      .qr-wrap { margin: 4px 0 16px; }
+      .qr-url { margin-top: 8px; font-size: 13px; }
+      .qr-hint { font-size: 11px; }
+
+      .steps { padding-top: 14px; }
+      .step { margin-bottom: 10px; gap: 13px; }
+      .num { width: 28px; height: 28px; font-size: 14px; }
+      .step-body h3 { font-size: 16px; }
+      .step-body p { font-size: 13px; line-height: 1.5; }
+
+      .tips { margin-top: 6px; padding: 12px 16px; font-size: 12px; line-height: 1.6; }
+
+      /* 단계가 두 장으로 갈라지지 않게 한다 */
+      .step, .tips { break-inside: avoid; page-break-inside: avoid; }
     }
   </style>
 </head>
@@ -143,7 +167,7 @@
       <div class="num">5</div>
       <div class="step-body">
         <h3>Prefer to listen? <span class="badge">NEW</span></h3>
-        <p>Tap the <b>🔇</b> button at the top to switch it to <b>🔊</b>, and you can hear the
+        <p>Tap the <b>🔇️</b> button at the top to switch it to <b>🔊</b>, and you can hear the
         translation as well. Please use <b>earphones</b> so you don't disturb those around you.</p>
       </div>
     </div>
