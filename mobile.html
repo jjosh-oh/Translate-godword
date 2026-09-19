@@ -128,7 +128,7 @@
         <option value="Arabic">العربية</option>
       </select>
       <span id="size-controls">
-        <button id="voice-btn" onclick="toggleVoice()" style="width:auto; padding:0 10px;">🔇</button>
+        <button id="voice-btn" onclick="toggleVoice()" style="width:auto; padding:0 10px;">🔇️</button>
         <button onclick="changeSize(-0.5)">－</button>
         <button onclick="changeSize(0.5)">＋</button>
       </span>
@@ -332,7 +332,7 @@
 
   function toggleVoice() {
     voiceOn = !voiceOn;
-    document.getElementById("voice-btn").textContent = voiceOn ? "🔊" : "🔇";
+    document.getElementById("voice-btn").textContent = voiceOn ? "🔊" : "🔇️";
     if (!voiceOn) { stopPlayback(); return; }   // 끄면 즉시 정지
     // 사용자 제스처 시점: 오디오 잠금 해제 (무음 버퍼 1회 재생)
     const ctx = ensureAudioCtx();
