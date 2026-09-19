@@ -30,7 +30,12 @@
     .band{ background:var(--navy); color:#fff; display:flex; align-items:center; gap:20px; padding:20px 34px; }
     .logo-tile{ background:#fff; border-radius:14px; padding:10px 14px; flex-shrink:0; display:flex; align-items:center;
                 min-width:88px; min-height:66px; justify-content:center; }
-    .logo-tile img{ height:64px; max-width:220px; display:block; object-fit:contain; }
+    /* 높이를 고정하면 세로형 로고가 폭까지 좁아져 가늘게 나온다.
+       양쪽에 한계만 두어 어떤 비율이든 제 모양으로 크게 보이게 한다.
+       세로형이 커지면 머리띠가 길어지는데, 인쇄 배율을 아래 fitPrint()가
+       다시 계산하므로 한 장을 넘지 않는다. */
+    .logo-tile img{ max-height:110px; max-width:260px; width:auto; height:auto;
+                    display:block; object-fit:contain; }
     .logo-tile .ph{ font-size:12px; color:#9aa3b8; text-align:center; line-height:1.4; }
     .band h2{ font-size:28px; font-weight:800; letter-spacing:.01em; }
     .band .right{ margin-left:auto; text-align:right; font-size:13px; color:#aebbe6; line-height:1.5; }
@@ -191,10 +196,33 @@
     const tile = document.getElementById("logo-tile");
     if (dataUrl) {
       tile.innerHTML = '<img src="'+dataUrl+'" alt="church logo">';
+      const im = tile.querySelector("img");
+      // 그림이 다 그려진 뒤라야 높이를 잴 수 있다
+      if (im.complete) fitPrint(); else im.onload = fitPrint;
     } else {
       tile.innerHTML = '<span class="ph">여기에<br>교회 로고</span>';
+      fitPrint();
     }
   }
+
+  // ── 인쇄 배율: 무엇을 넣든 letter 가로 한 장에 들어가게 맞춘다 ──
+  // letter 가로(279.4×215.9mm)에서 여백 5mm를 뺀 인쇄 가능 크기를 px로 환산한 값.
+  const 인쇄가능높이 = Math.round((215.9 - 10) / 25.4 * 96);   // 778
+  const 인쇄가능폭   = Math.round((279.4 - 10) / 25.4 * 96);   // 1018
+  function fitPrint(){
+    const p = document.getElementById("poster");
+    if (!p) return;
+    const 여유 = 8;                                   // 반올림 오차 대비
+    const 배율 = Math.min(0.88,
+                          (인쇄가능높이 - 여유) / p.offsetHeight,
+                          (인쇄가능폭   - 여유) / p.offsetWidth);
+    let st = document.getElementById("fit-print");
+    if (!st) { st = document.createElement("style"); st.id = "fit-print";
+               document.head.appendChild(st); }
+    st.textContent = "@media print{ .poster{ zoom:" + 배율.toFixed(3) + " !important; } }";
+    return 배율;
+  }
+  window.addEventListener("load", fitPrint);
 
   // 초기값
   const savedChurch = load("lw_poster_church","");
