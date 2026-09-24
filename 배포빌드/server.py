@@ -56,10 +56,26 @@ else:
 # 설정(.env)은 APP_DIR에서 읽음
 load_dotenv(os.path.join(APP_DIR, ".env"), override=True, encoding="utf-8-sig")
 
-# Google Cloud 인증: .exe 옆 google-key.json 자동 사용
+# Google Cloud 인증 — 우선순위: APP_DIR\google-key.json > .env의 경로
+#
+# 설정 화면에서 올린 google-key.json이 가장 최근의, 가장 분명한 뜻이므로 그것을 쓴다.
+# 예전에는 .env에 옛 경로가 남아 있으면 그쪽이 이겨서, 교회 키를 새로 올려도
+# 껐다 켜면 조용히 옛 인증(개인 gcloud 등)으로 돌아갔다. 화면에 오류가 안 뜨므로
+# 알아채기 어렵다. 키를 갈아 끼울 때 반드시 걸리는 함정이라 순서를 뒤집었다.
 _key_path = os.path.join(APP_DIR, "google-key.json")
-if os.path.exists(_key_path) and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
+_env_cred = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+if os.path.exists(_key_path):
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _key_path
+    if _env_cred and os.path.normcase(os.path.abspath(_env_cred)) != \
+       os.path.normcase(os.path.abspath(_key_path)):
+        _cred_note = (".env의 GOOGLE_APPLICATION_CREDENTIALS(%s) 대신 "
+                      "google-key.json을 씁니다" % _env_cred)
+    else:
+        _cred_note = ""
+elif _env_cred and not os.path.exists(_env_cred):
+    _cred_note = "구글 인증 파일을 찾을 수 없습니다 — %s" % _env_cred
+else:
+    _cred_note = ""
 
 # 이 프로그램의 버전 — 새 버전 알림 비교 기준 (배포 시 함께 올림)
 APP_VERSION = "1.4"

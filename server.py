@@ -29,10 +29,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Google Cloud 인증: 폴더 내 google-key.json 자동 사용
+# Google Cloud 인증 — 우선순위: 폴더의 google-key.json > .env의 경로
+# (배포본과 같은 규칙. 왜 이 순서인지는 배포빌드/server.py의 주석 참고)
 _key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "google-key.json")
-if os.path.exists(_key_path) and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
+_env_cred = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+if os.path.exists(_key_path):
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _key_path
+    if _env_cred and os.path.normcase(os.path.abspath(_env_cred)) != \
+       os.path.normcase(os.path.abspath(_key_path)):
+        _cred_note = (".env의 GOOGLE_APPLICATION_CREDENTIALS(%s) 대신 "
+                      "google-key.json을 씁니다" % _env_cred)
+    else:
+        _cred_note = ""
+elif _env_cred and not os.path.exists(_env_cred):
+    _cred_note = "구글 인증 파일을 찾을 수 없습니다 — %s" % _env_cred
+else:
+    _cred_note = ""
 
 # 이 프로그램의 버전 — 새 버전 알림 비교 기준 (배포 시 함께 올림)
 APP_VERSION = "1.1"
