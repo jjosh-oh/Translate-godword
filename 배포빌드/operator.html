@@ -688,6 +688,8 @@
       showTtsWarn(msg.data);
     } else if (msg.type === "tunnel_error") {
       showTunnelWarn(msg.data);
+    } else if (msg.type === "tunnel_temp") {
+      showTunnelTemp(msg.data);
     } else if (msg.type === "stt_error") {
       const ip = document.getElementById("input-preview");
       ip.innerHTML = '<span style="color:#f44336">⚠ 음성인식 오류: ' + msg.data + '</span>';
@@ -1275,6 +1277,16 @@
     if (img) img.style.display = "none";
     const link = document.getElementById("qr-link");
     if (link) link.textContent = "";
+  }
+
+  // 임시 주소로 열렸을 때 — 터널은 살아 있으므로 QR은 쓸 수 있다.
+  // 다만 벽에 붙은 인쇄물과 주소가 다르니 화면의 QR을 보여 주어야 한다.
+  // 그래서 빨강이 아니라 주황이고, QR을 감추지 않고 오히려 새로 불러온다.
+  function showTunnelTemp(text) {
+    warnBar("tunnel-warn", "⚠ " + text, "#ef6c00");
+    const img = document.getElementById("qr-img");
+    if (img) img.style.display = "";
+    loadTunnelUrl();          // 주소가 바뀌었으니 QR을 다시 만든다
   }
 
   // 음성 연결 경고 — 다시 붙으면 저절로 사라지므로 닫기 버튼을 두지 않는다.

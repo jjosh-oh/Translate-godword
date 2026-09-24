@@ -126,7 +126,7 @@ def _no_cache_html(resp):
 _ngrok_url = ""  # 실제 연결된 공개 URL (터널이 뜨면 채워짐)
 # 터널 실패 경고를 담아 둔다. 운영자 화면은 시작 몇 초 뒤에 붙으므로
 # 그때 보내 주지 않으면 경고를 놓친다(구독 전에 보낸 것은 사라진다).
-_ngrok_warn = [""]
+_ngrok_warn = ["", ""]   # [종류, 문구]
 
 def _ngrok_fail(detail):
     """터널을 못 열었을 때 — 잘못된 QR을 치우고 운영자 화면에 알린다.
@@ -147,7 +147,8 @@ def _ngrok_fail(detail):
                "설정 화면의 ngrok 주소를 확인하세요.")
     else:
         msg = "터널을 열지 못했습니다 — 교인 휴대폰이 접속할 수 없습니다. " + detail
-    _ngrok_warn[0] = msg
+    _ngrok_warn[0] = "tunnel_error"
+    _ngrok_warn[1] = msg
     # 이 함수는 모듈이 다 읽히기 전에도 불릴 수 있다(터널이 곧바로 실패하는 경우).
     # operator_queue·_log_diag가 아직 없을 수 있으므로 각각 감싼다.
     try:
@@ -156,6 +157,27 @@ def _ngrok_fail(detail):
         pass
     try:
         _log_diag("ngrok_fail", detail, min_gap=60.0)
+    except Exception:
+        pass
+
+
+def _ngrok_temp(url, detail):
+    """고정 주소는 못 썼지만 임시 주소로 열렸을 때.
+
+    터널은 살아 있으므로 QR은 쓸 수 있다. 다만 벽에 붙은 인쇄물의 주소와는
+    다르므로, 운영자가 화면의 QR을 대신 보여 주어야 한다는 것을 알린다.
+    """
+    msg = ("고정 주소를 쓰지 못해 임시 주소로 열었습니다 — " + url + " . "
+           "벽에 붙은 안내문·포스터의 QR은 지금 쓸 수 없으니, 이 화면의 QR을 "
+           "교인에게 보여 주세요. 예배 뒤 설정 화면에서 ngrok 주소를 고쳐 주십시오.")
+    _ngrok_warn[0] = "tunnel_temp"
+    _ngrok_warn[1] = msg
+    try:
+        operator_queue.put(("tunnel_temp", msg))
+    except Exception:
+        pass
+    try:
+        _log_diag("ngrok_temp", str(detail)[:300], min_gap=60.0)
     except Exception:
         pass
 
@@ -189,49 +211,75 @@ def _start_ngrok():
     except Exception:
         return
 
-    # 터널 시작
-    cmd = [ngrok_exe, "http", "5000", "--log=stdout", "--log-format=json"]
-    if domain:
-        cmd += ["--domain", domain]
-    try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="ignore")
-    except FileNotFoundError:
-        print("[ngrok] ngrok을 찾을 수 없습니다. 설치 여부를 확인하세요.")
+    def _run(use_domain):
+        """ngrok을 한 번 띄워 본다. (열렸나, 주소, 실패 사유)를 돌려준다.
+
+        출력을 끝까지 읽어야 한다 — 열렸는지 실패했는지는 여기서만 알 수 있다.
+        """
+        cmd = [ngrok_exe, "http", "5000", "--log=stdout", "--log-format=json"]
+        if use_domain:
+            cmd += ["--domain", use_domain]
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT,
+                                    text=True, encoding="utf-8", errors="ignore")
+        except FileNotFoundError:
+            return False, "", "ngrok 실행 파일을 찾을 수 없습니다"
+
+        for line in proc.stdout:
+            url, err, lvl = "", "", ""
+            try:
+                obj = json.loads(line)
+                url = obj.get("url") or obj.get("public_url") or ""
+                err = str(obj.get("err") or "")
+                lvl = str(obj.get("lvl") or "")
+            except Exception:
+                m = re.search(r"url=(https://\S+)", line)
+                if m:
+                    url = m.group(1)
+            if err in ("", "<nil>"):
+                err = ""
+
+            if url.startswith("https://"):
+                # 열렸으면 곧바로 돌려준다. 여기서 계속 읽고 있으면 함수가
+                # 영영 안 돌아와 뒤 처리(되살리기·경고)가 실행되지 않는다.
+                # 다만 파이프를 비워 주지 않으면 가득 차서 ngrok이 멈추므로
+                # 남은 출력은 딴 실로 흘려보낸다.
+                def _drain(p=proc):
+                    try:
+                        for _ in p.stdout:
+                            pass
+                    except Exception:
+                        pass
+                threading.Thread(target=_drain, daemon=True).start()
+                return True, url, ""
+            # 성공하면 위에서 곧바로 돌아가므로, 여기 오는 건 아직 안 열린 상태다
+            if err or lvl in ("eror", "crit", "fatal") or "ERR_NGROK" in line:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                return False, "", (err or line)
+        # 여기 왔다는 건 끝내 열리지 않고 출력이 끝났다는 뜻이다
+        return False, "", "ngrok이 터널을 열지 못하고 종료했습니다"
+
+    ok, url, detail = _run(domain)
+    if ok:
+        _ngrok_url = url
+        _ngrok_warn[0] = _ngrok_warn[1] = ""
         return
 
-    # ngrok 출력을 끝까지 읽는다. 도메인이 있어도 읽어야 한다 —
-    # 열렸는지 실패했는지는 여기서만 알 수 있다.
-    started = False
-    for line in proc.stdout:
-        url, err, lvl = "", "", ""
-        try:
-            obj = json.loads(line)
-            url = obj.get("url") or obj.get("public_url") or ""
-            err = str(obj.get("err") or "")
-            lvl = str(obj.get("lvl") or "")
-        except Exception:
-            m = re.search(r"url=(https://\S+)", line)
-            if m:
-                url = m.group(1)
-        if err in ("", "<nil>"):
-            err = ""
-
-        if url.startswith("https://"):
-            _ngrok_url = url
-            _ngrok_warn[0] = ""          # 열렸으니 경고를 거둔다
-            started = True
-            continue
-
-        # 실패 신호: 오류 수준 로그, err 항목, 또는 ngrok 오류 코드
-        if not started and (err or lvl in ("eror", "crit", "fatal")
-                            or "ERR_NGROK" in line):
-            _ngrok_fail(err or line)
+    # 고정 주소로 실패했다. 주소 없이 한 번 더 — 임시 주소로라도 열어 두면
+    # 운영자가 화면의 QR을 보여 주어 그 주일을 넘길 수 있다.
+    if domain:
+        ok2, url2, detail2 = _run("")
+        if ok2:
+            _ngrok_url = url2
+            _ngrok_temp(url2, detail)
             return
+        detail = detail or detail2
 
-    # 출력이 끝났는데 끝내 열리지 않았다 (ngrok이 그냥 죽은 경우)
-    if not started:
-        _ngrok_fail("ngrok이 터널을 열지 못하고 종료했습니다")
+    _ngrok_fail(detail)
 
 if os.environ.get("NGROK_AUTHTOKEN"):
     threading.Thread(target=_start_ngrok, daemon=True).start()
@@ -2174,8 +2222,8 @@ def operator_stream():
     def event_stream():
         yield _SSE_PADDING
         yield f"data: {json.dumps({'type': 'settings', 'data': settings})}\n\n"
-        if _ngrok_warn[0]:      # 붙기 전에 터널이 실패했으면 지금 알린다
-            yield f"data: {json.dumps({'type': 'tunnel_error', 'data': _ngrok_warn[0]})}\n\n"
+        if _ngrok_warn[1]:      # 붙기 전에 터널 문제가 있었으면 지금 알린다
+            yield f"data: {json.dumps({'type': _ngrok_warn[0], 'data': _ngrok_warn[1]})}\n\n"
         try:
             while True:
                 try:
