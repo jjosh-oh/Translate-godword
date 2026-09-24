@@ -29,11 +29,35 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _strip_bom(path):
+    """JSON 파일 앞의 BOM을 떼어 제자리에 다시 쓴다. 뗐으면 True.
+
+    구글 라이브러리는 BOM이 붙은 인증 JSON을 못 읽고
+    "is not a valid json file"만 낸다. 메모장으로 열어 저장하면 붙는다.
+    내용은 그대로 두고 앞머리만 없애므로 여러 번 돌려도 안전하다.
+    """
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+        for bom, enc in ((b"\xef\xbb\xbf", "utf-8"),
+                         (b"\xff\xfe", "utf-16-le"),
+                         (b"\xfe\xff", "utf-16-be")):
+            if raw.startswith(bom):
+                text = raw[len(bom):].decode(enc)
+                with open(path, "wb") as f:
+                    f.write(text.encode("utf-8"))
+                return True
+    except Exception:
+        pass                      # 못 고쳐도 프로그램은 떠야 한다
+    return False
+
+
 # Google Cloud 인증 — 우선순위: 폴더의 google-key.json > .env의 경로
 # (배포본과 같은 규칙. 왜 이 순서인지는 배포빌드/server.py의 주석 참고)
 _key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "google-key.json")
 _env_cred = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
 if os.path.exists(_key_path):
+    _strip_bom(_key_path)          # 메모장으로 저장해 BOM이 붙었으면 고친다
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _key_path
     if _env_cred and os.path.normcase(os.path.abspath(_env_cred)) != \
        os.path.normcase(os.path.abspath(_key_path)):

@@ -56,6 +56,29 @@ else:
 # 설정(.env)은 APP_DIR에서 읽음
 load_dotenv(os.path.join(APP_DIR, ".env"), override=True, encoding="utf-8-sig")
 
+def _strip_bom(path):
+    """JSON 파일 앞의 BOM을 떼어 제자리에 다시 쓴다. 뗐으면 True.
+
+    구글 라이브러리는 BOM이 붙은 인증 JSON을 못 읽고
+    "is not a valid json file"만 낸다. 메모장으로 열어 저장하면 붙는다.
+    내용은 그대로 두고 앞머리만 없애므로 여러 번 돌려도 안전하다.
+    """
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+        for bom, enc in ((b"\xef\xbb\xbf", "utf-8"),
+                         (b"\xff\xfe", "utf-16-le"),
+                         (b"\xfe\xff", "utf-16-be")):
+            if raw.startswith(bom):
+                text = raw[len(bom):].decode(enc)
+                with open(path, "wb") as f:
+                    f.write(text.encode("utf-8"))
+                return True
+    except Exception:
+        pass                      # 못 고쳐도 프로그램은 떠야 한다
+    return False
+
+
 # Google Cloud 인증 — 우선순위: APP_DIR\google-key.json > .env의 경로
 #
 # 설정 화면에서 올린 google-key.json이 가장 최근의, 가장 분명한 뜻이므로 그것을 쓴다.
@@ -65,6 +88,7 @@ load_dotenv(os.path.join(APP_DIR, ".env"), override=True, encoding="utf-8-sig")
 _key_path = os.path.join(APP_DIR, "google-key.json")
 _env_cred = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
 if os.path.exists(_key_path):
+    _strip_bom(_key_path)          # 메모장으로 저장해 BOM이 붙었으면 고친다
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _key_path
     if _env_cred and os.path.normcase(os.path.abspath(_env_cred)) != \
        os.path.normcase(os.path.abspath(_key_path)):
@@ -2213,6 +2237,11 @@ def setup_upload_google_key():
         if parsed.get("type") != "service_account":
             return jsonify(ok=False, error="서비스 계정 JSON 파일이 아닙니다")
         dest = os.path.join(APP_DIR, "google-key.json")
+        # BOM이 붙은 채 저장하면 구글 라이브러리가 못 읽는다
+        for _bom in (b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff"):
+            if content.startswith(_bom):
+                content = json.dumps(parsed, ensure_ascii=False).encode("utf-8")
+                break
         with open(dest, "wb") as out:
             out.write(content)
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = dest

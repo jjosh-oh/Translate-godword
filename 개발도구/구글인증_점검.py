@@ -13,6 +13,7 @@ JSON을 올리면 google-key.json으로 저장되는데, .env에 GOOGLE_APPLICAT
 관련: CLAUDE.md '겪었던 함정'
 """
 import io
+import json
 import os
 import sys
 import shutil
@@ -23,7 +24,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEPLOY = os.path.join(ROOT, "배포빌드", "server.py")
 
-START = "# Google Cloud 인증"
+START = "def _strip_bom("
 END = "# 이 프로그램의 버전"
 
 fails = []
@@ -96,6 +97,33 @@ try:
     없는경로 = os.path.join(tmp, "사라진파일.json")
     고른것, 알림 = 판단(tmp, 없는경로, False)
     check("④ .env가 없는 파일을 가리키면 알려준다", "찾을 수 없" in 알림, 알림[:60])
+
+    # ⑤ BOM이 붙은 키 파일을 제자리에서 고친다
+    #    구글 라이브러리는 BOM이 붙은 JSON을 못 읽는다. 메모장으로 열어 저장하면 붙는다.
+    본문 = '{"type":"service_account","project_id":"bom-test"}'
+    for 이름, bom, enc in (("UTF-8 BOM", b"\xef\xbb\xbf", "utf-8"),
+                          ("UTF-16 BOM", b"\xff\xfe", "utf-16-le")):
+        with open(키파일, "wb") as f:
+            f.write(bom + 본문.encode(enc))
+        판단(tmp, "", False)                  # 키 파일은 이미 만들어 두었다
+        raw = open(키파일, "rb").read()
+        붙어있나 = (raw.startswith(b"\xef\xbb\xbf") or raw.startswith(b"\xff\xfe")
+                  or raw.startswith(b"\xfe\xff"))
+        check("⑤ %s가 붙어 있으면 떼어 낸다" % 이름, not 붙어있나)
+        try:
+            읽힘 = json.loads(open(키파일, "rb").read().decode("utf-8"))
+            check("⑤ %s 파일이 고친 뒤 읽힌다" % 이름, 읽힘.get("project_id") == "bom-test")
+        except Exception as e:
+            check("⑤ %s 파일이 고친 뒤 읽힌다" % 이름, False, str(e)[:60])
+        if os.path.exists(키파일):
+            os.remove(키파일)
+
+    # ⑥ BOM이 없는 정상 파일은 건드리지 않는다
+    with open(키파일, "wb") as f:
+        f.write(본문.encode("utf-8"))
+    전 = open(키파일, "rb").read()
+    판단(tmp, "", False)
+    check("⑥ 멀쩡한 파일은 손대지 않는다", open(키파일, "rb").read() == 전)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 
