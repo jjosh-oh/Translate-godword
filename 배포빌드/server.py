@@ -124,6 +124,41 @@ def _no_cache_html(resp):
 
 # ── ngrok 자동 시작 ─────────────────────────────────────────────────────────
 _ngrok_url = ""  # 실제 연결된 공개 URL (터널이 뜨면 채워짐)
+# 터널 실패 경고를 담아 둔다. 운영자 화면은 시작 몇 초 뒤에 붙으므로
+# 그때 보내 주지 않으면 경고를 놓친다(구독 전에 보낸 것은 사라진다).
+_ngrok_warn = [""]
+
+def _ngrok_fail(detail):
+    """터널을 못 열었을 때 — 잘못된 QR을 치우고 운영자 화면에 알린다.
+
+    주소를 그대로 두면 교인이 QR을 스캔해 *다른 컴퓨터*로 붙는다.
+    조용한 실패가 가장 위험하므로 주소를 지우고 빨간 경고를 띄운다.
+    """
+    global _ngrok_url
+    _ngrok_url = ""
+    detail = " ".join(str(detail).split())[:300]
+    if "already online" in detail or "ERR_NGROK_334" in detail:
+        msg = ("터널을 열지 못했습니다 — 다른 컴퓨터가 같은 주소를 쓰고 있습니다. "
+               "그 컴퓨터의 LiveWord를 끄고 이 프로그램을 다시 시작하세요.")
+    elif "ERR_NGROK_105" in detail or "authentication failed" in detail.lower():
+        msg = "터널을 열지 못했습니다 — ngrok 토큰이 올바르지 않습니다. 설정 화면에서 확인하세요."
+    elif "ERR_NGROK_313" in detail or "not found" in detail.lower():
+        msg = ("터널을 열지 못했습니다 — 이 계정에 없는 고정 주소입니다. "
+               "설정 화면의 ngrok 주소를 확인하세요.")
+    else:
+        msg = "터널을 열지 못했습니다 — 교인 휴대폰이 접속할 수 없습니다. " + detail
+    _ngrok_warn[0] = msg
+    # 이 함수는 모듈이 다 읽히기 전에도 불릴 수 있다(터널이 곧바로 실패하는 경우).
+    # operator_queue·_log_diag가 아직 없을 수 있으므로 각각 감싼다.
+    try:
+        operator_queue.put(("tunnel_error", msg))
+    except Exception:
+        pass
+    try:
+        _log_diag("ngrok_fail", detail, min_gap=60.0)
+    except Exception:
+        pass
+
 
 def _start_ngrok():
     """백그라운드에서 ngrok 터널을 시작하고 URL을 _ngrok_url에 저장."""
@@ -142,10 +177,10 @@ def _start_ngrok():
         if os.path.exists(_bundled):
             ngrok_exe = _bundled
 
-    # 고정 도메인이 있으면 URL을 미리 설정 (파싱 기다릴 필요 없음)
+    # 고정 도메인이 있으면 URL을 미리 넣어 둔다 — QR이 곧바로 뜨게 하기 위함이다.
+    # 다만 이것은 '아직 확인되지 않은' 주소다. 아래에서 실제로 열렸는지 끝까지 본다.
     if domain:
         _ngrok_url = "https://" + domain
-        print(f"[ngrok] 고정 도메인: {_ngrok_url}")
 
     # authtoken 등록 (최초 1회 또는 변경 시)
     try:
@@ -165,23 +200,38 @@ def _start_ngrok():
         print("[ngrok] ngrok을 찾을 수 없습니다. 설치 여부를 확인하세요.")
         return
 
-    # stdout에서 URL 파싱 (고정 도메인 없는 경우 여기서 URL 확보)
-    if not domain:
-        for line in proc.stdout:
-            try:
-                obj = json.loads(line)
-                url = obj.get("url") or obj.get("public_url") or ""
-                if url.startswith("https://"):
-                    _ngrok_url = url
-                    print(f"[ngrok] 터널 연결: {_ngrok_url}")
-                    break
-            except Exception:
-                if "url=" in line:
-                    m = re.search(r"url=(https://\S+)", line)
-                    if m:
-                        _ngrok_url = m.group(1)
-                        print(f"[ngrok] 터널 연결: {_ngrok_url}")
-                        break
+    # ngrok 출력을 끝까지 읽는다. 도메인이 있어도 읽어야 한다 —
+    # 열렸는지 실패했는지는 여기서만 알 수 있다.
+    started = False
+    for line in proc.stdout:
+        url, err, lvl = "", "", ""
+        try:
+            obj = json.loads(line)
+            url = obj.get("url") or obj.get("public_url") or ""
+            err = str(obj.get("err") or "")
+            lvl = str(obj.get("lvl") or "")
+        except Exception:
+            m = re.search(r"url=(https://\S+)", line)
+            if m:
+                url = m.group(1)
+        if err in ("", "<nil>"):
+            err = ""
+
+        if url.startswith("https://"):
+            _ngrok_url = url
+            _ngrok_warn[0] = ""          # 열렸으니 경고를 거둔다
+            started = True
+            continue
+
+        # 실패 신호: 오류 수준 로그, err 항목, 또는 ngrok 오류 코드
+        if not started and (err or lvl in ("eror", "crit", "fatal")
+                            or "ERR_NGROK" in line):
+            _ngrok_fail(err or line)
+            return
+
+    # 출력이 끝났는데 끝내 열리지 않았다 (ngrok이 그냥 죽은 경우)
+    if not started:
+        _ngrok_fail("ngrok이 터널을 열지 못하고 종료했습니다")
 
 if os.environ.get("NGROK_AUTHTOKEN"):
     threading.Thread(target=_start_ngrok, daemon=True).start()
@@ -2124,6 +2174,8 @@ def operator_stream():
     def event_stream():
         yield _SSE_PADDING
         yield f"data: {json.dumps({'type': 'settings', 'data': settings})}\n\n"
+        if _ngrok_warn[0]:      # 붙기 전에 터널이 실패했으면 지금 알린다
+            yield f"data: {json.dumps({'type': 'tunnel_error', 'data': _ngrok_warn[0]})}\n\n"
         try:
             while True:
                 try:

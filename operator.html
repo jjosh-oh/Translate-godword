@@ -686,6 +686,8 @@
       showCostWarn(msg.data);
     } else if (msg.type === "tts_error") {
       showTtsWarn(msg.data);
+    } else if (msg.type === "tunnel_error") {
+      showTunnelWarn(msg.data);
     } else if (msg.type === "stt_error") {
       const ip = document.getElementById("input-preview");
       ip.innerHTML = '<span style="color:#f44336">⚠ 음성인식 오류: ' + msg.data + '</span>';
@@ -1261,6 +1263,18 @@
     bar.style.cursor = "pointer";
     bar.title = "눌러서 닫기";
     bar.onclick = () => bar.remove();
+  }
+
+  // 터널 실패 경고 — 교인 휴대폰이 아예 못 붙는 상태다. 가장 급한 경고라
+  // 빨간색으로 띄우고 닫기 버튼을 두지 않는다. 예전에는 터널이 안 열려도
+  // QR과 주소가 멀쩡히 떠서, 교인이 스캔하면 다른 컴퓨터로 붙었다.
+  function showTunnelWarn(text) {
+    warnBar("tunnel-warn", "⚠ " + text, "#b71c1c");
+    // 잘못된 QR을 치운다 — 서버도 주소를 비웠다
+    const img = document.getElementById("qr-img");
+    if (img) img.style.display = "none";
+    const link = document.getElementById("qr-link");
+    if (link) link.textContent = "";
   }
 
   // 음성 연결 경고 — 다시 붙으면 저절로 사라지므로 닫기 버튼을 두지 않는다.
