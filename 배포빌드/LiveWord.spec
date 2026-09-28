@@ -43,6 +43,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='LiveWord',
+    icon='liveword.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
