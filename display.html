@@ -177,7 +177,31 @@
     }
 
     // 화면을 넘치면 맨 위 줄부터 제거 (위로 스크롤되며 사라짐)
-    while (lines.length > 0 && display.scrollHeight > display.clientHeight) {
+    //
+    // 예전에는 scrollHeight > clientHeight 로 판정했는데, 이 상자는
+    // overflow:hidden 이라 두 값이 늘 같아서 한 번도 걸리지 않았다.
+    // 그래서 줄이 설교 내내 쌓였다 — 800문장이면 div 800개를 매 갱신마다
+    // 다시 그린다(실측 6.8ms, 체감되진 않으나 헛일이다).
+    //
+    // 자식들의 실제 높이를 더해 견준다. 다만 OBS에서 사용자 CSS로 옛 줄을
+    // 감추면(display:none) 높이가 0으로 잡혀 이 판정이 안 걸리므로,
+    // 줄 수 상한을 함께 둔다. 어느 쪽이든 DOM이 무한정 자라지 않는다.
+    const MAX_LINES = 40;
+    while (lines.length > MAX_LINES) {
+      lines.shift();
+      display.removeChild(display.firstChild);
+    }
+    const cs = getComputedStyle(display);
+    const gapPx = parseFloat(cs.gap) || 0;
+    const room = display.clientHeight
+               - (parseFloat(cs.paddingTop) || 0)
+               - (parseFloat(cs.paddingBottom) || 0);
+    const used = () => {
+      let h = 0;
+      for (const k of display.children) h += k.offsetHeight;
+      return h + gapPx * Math.max(0, display.children.length - 1);
+    };
+    while (lines.length > 0 && used() > room) {
       lines.shift();
       display.removeChild(display.firstChild);
     }
