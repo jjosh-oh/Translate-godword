@@ -51,6 +51,9 @@ TEMPLATE = os.path.join(OUT_DIR, "_template.html")
 BULLETIN = os.path.join(OUT_DIR, "_주보안내문.html")
 DESK = os.path.join(OUT_DIR, "_안내데스크.html")
 LOGO = os.path.join(OUT_DIR, "_로고.png")
+# 홈페이지 안내 페이지 맨 위에 거는 포스터. 2026-09-29 사용자가 준 카드형 포스터(119x76mm)다.
+# 인쇄용 통역포스터.pdf(letter)는 여전히 poster.html 로 만든다 — 둘은 다른 물건이다.
+PAGE_POSTER_PDF = os.path.join(OUT_DIR, "_홈페이지포스터.pdf")
 
 
 # ── 재료 ────────────────────────────────────────────────────────────────────
@@ -131,6 +134,13 @@ def poster_data_uri(img: Image.Image, width: int = 1600) -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+def page_poster_image() -> Image.Image:
+    """홈페이지에 걸 포스터를 PDF에서 그린다. 가로 1600px 이상이 나오게 해상도를 잡는다."""
+    page = pymupdf.open(PAGE_POSTER_PDF)[0]
+    dpi = max(300, int(1700 / (page.rect.width / 72)))
+    return Image.open(io.BytesIO(page.get_pixmap(dpi=dpi).tobytes("png")))
+
+
 def build_page(poster: Image.Image) -> None:
     with open(TEMPLATE, "r", encoding="utf-8") as f:
         html = f.read()
@@ -186,8 +196,8 @@ def build_desk() -> None:
 
 
 def main() -> None:
-    poster = build_poster()
-    build_page(poster)
+    build_poster()
+    build_page(page_poster_image())
     build_page_pdf()
     build_desk()
     build_bulletin()
