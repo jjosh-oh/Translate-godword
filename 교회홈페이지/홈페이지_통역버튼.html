@@ -26,12 +26,13 @@
 #lw-cta a.row:hover .btn{background:#e85f06}
 #lw-cta a.row:hover .tile{transform:translateY(-2px)}
 
-#lw-cta .main{flex:1 1 300px;min-width:0;display:flex;align-items:center;gap:18px}
+/* 위 세 칸(유튜브·주일예배·주중모임)과 같은 모양: 타일 56x56 · 모서리 5px · 그림자 없음
+   · 아이콘 22px · 간격 20px · 제목 윗선에 맞춰 위로 정렬 (실제 값을 재서 맞췄다) */
+#lw-cta .main{flex:1 1 300px;min-width:0;display:flex;align-items:flex-start;gap:20px}
 
-#lw-cta .tile{flex:0 0 58px;width:58px;height:58px;background:#fff;border-radius:10px;
-  display:flex;align-items:center;justify-content:center;transition:transform .15s ease;
-  box-shadow:0 1px 3px rgba(0,0,0,.06)}
-#lw-cta .tile svg{width:28px;height:28px;display:block}
+#lw-cta .tile{flex:0 0 56px;width:56px;height:56px;background:#fff;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;transition:transform .15s ease}
+#lw-cta .tile svg{width:22px;height:22px;display:block}
 
 #lw-cta .txt{flex:1 1 auto;min-width:0}
 #lw-cta .t1,#lw-cta .t2,#lw-cta .t3{display:block}
@@ -52,9 +53,7 @@
 /* 더 좁으면 — 글자를 줄이고 아이콘을 작게 */
 @container (max-width:380px){
   #lw-cta{padding:20px 18px}
-  #lw-cta a.row,#lw-cta .main{gap:14px}
-  #lw-cta .tile{flex:0 0 46px;width:46px;height:46px}
-  #lw-cta .tile svg{width:23px;height:23px}
+  #lw-cta a.row{gap:14px}
   #lw-cta .t1{font-size:19px}
   #lw-cta .t2{font-size:15px}
   #lw-cta .t3{font-size:13.5px}
