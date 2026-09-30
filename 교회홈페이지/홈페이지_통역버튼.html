@@ -33,6 +33,13 @@
    · 아이콘 22px · 간격 20px · 제목 윗선에 맞춰 위로 정렬 (실제 값을 재서 맞췄다) */
 #lw-cta .main{flex:1 1 300px;min-width:0;display:flex;align-items:flex-start;gap:20px}
 
+/* 넓은 화면 — 아이콘·글·단추를 한 덩어리로 가운데에 둔다.
+   단추를 오른쪽 끝에 두면 글과 떨어져 보이고, 글 옆에 붙이면 오른쪽 절반이 빈다 */
+@container (min-width:561px){
+  #lw-cta a.row{justify-content:center;flex-wrap:nowrap;gap:28px}
+  #lw-cta .main{flex:0 1 auto}
+}
+
 #lw-cta .tile{flex:0 0 56px;width:56px;height:56px;background:#fff;border-radius:5px;
   display:flex;align-items:center;justify-content:center;transition:transform .15s ease}
 #lw-cta .tile svg{width:22px;height:22px;display:block}
