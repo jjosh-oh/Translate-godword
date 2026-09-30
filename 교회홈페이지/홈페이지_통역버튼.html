@@ -49,13 +49,22 @@
   transition:background .15s ease;font-family:"Noto Sans KR",sans-serif}
 #lw-cta .btn .en{display:block;font-size:12.5px;font-weight:500;opacity:.92;margin-top:1px}
 
-/* 칸이 좁아지면 — 단추를 아래로 내려 가로 전체를 쓴다 */
+/* 좁을 때 "실시간 통역 자막" 옆에 붙는 작은 단추 — 넓을 때는 숨긴다 */
+#lw-cta .pill{display:none;background:var(--orange);color:#fff;border-radius:999px;
+  font-size:12.5px;font-weight:600;line-height:1;padding:5px 11px 6px;margin-left:8px;
+  vertical-align:2px;white-space:nowrap;transition:background .15s ease}
+#lw-cta a.row:hover .pill{background:#e85f06}
+
+/* 칸이 좁아지면(휴대폰) — 큰 단추를 없애고 "실시간 통역 자막" 옆에 작은 단추를 붙인다.
+   단추 줄이 사라져 띠 높이가 크게 줄어든다 */
 @container (max-width:560px){
-  #lw-cta .btn{flex:1 1 100%;padding:14px 20px}
+  #lw-cta{padding:18px 20px}
+  #lw-cta .btn{display:none}
+  #lw-cta .pill{display:inline-block}
 }
 /* 더 좁으면 — 글자를 줄이고 아이콘을 작게 */
 @container (max-width:380px){
-  #lw-cta{padding:20px 18px}
+  #lw-cta{padding:16px 16px}
   #lw-cta a.row{gap:14px}
   #lw-cta .t1{font-size:19px}
   #lw-cta .t2{font-size:15px}
@@ -76,7 +85,7 @@
       </span>
       <span class="txt">
         <span class="t1">English Subtitles</span>
-        <span class="t2">실시간 통역 자막</span>
+        <span class="t2">실시간 통역 자막<span class="pill">바로가기 ›</span></span>
         <span class="t3">설교를 원하는 언어로 휴대폰에서 보세요 · Follow the sermon on your phone</span>
       </span>
     </span>
