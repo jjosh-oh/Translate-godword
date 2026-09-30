@@ -102,7 +102,7 @@ else:
     _cred_note = ""
 
 # 이 프로그램의 버전 — 새 버전 알림 비교 기준 (배포 시 함께 올림)
-APP_VERSION = "1.4"
+APP_VERSION = "1.5"
 UPDATE_API = "https://api.github.com/repos/jjosh-oh/Translate-godword/releases/latest"
 
 app = Flask(__name__)
