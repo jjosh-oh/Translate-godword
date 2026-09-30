@@ -6,14 +6,15 @@
 #   통역안내.html      ← 워드프레스에 통째로 붙여넣을 페이지. 포스터 그림과 QR이 파일 안에 들어 있다.
 #   통역안내.pdf       ← 같은 안내를 letter 세로 2쪽으로 (나눠 주는 용)
 #   안내데스크.pdf     ← 안내데스크에 세워 두는 한 장 (letter 가로)
-#   통역포스터.pdf     ← 예배당 게시용. 배포빌드\poster.html 을 그대로 그려서 만든다 (letter 가로)
+#   통역포스터.pdf     ← 예배당 게시용. 카드형 포스터(_홈페이지포스터.pdf)를 letter 가로로 키운 것
 #   통역포스터.jpg     ← 같은 포스터의 그림 파일
 #   주보안내문.png     ← 주보 문서에 끼워 넣는 작은 안내 상자 (100×53mm, 300dpi)
 #   주보안내문.pdf     ← 같은 것의 인쇄용
 #
 # 인쇄물은 모두 letter(8.5×11in) — 미국 교회라 A4를 쓰지 않는다. 종이 크기는 각 HTML의 @page 가 정한다.
-# 다섯 가지 모두에 음성(이어폰) 안내가 들어간다. 포스터의 음성 안내는 poster.html 의 4단계인데,
-# 교회 컴퓨터에 설치된 poster.html 이 옛것이면 그 단계가 없다. 여기서는 저장소의 최신 파일을 쓴다.
+# 다섯 가지 모두에 음성(이어폰) 안내가 들어간다.
+# 포스터(홈페이지 맨 위·예배당 게시용)는 카드형 포스터 PDF 하나에서 나온다. 그 안의 QR은 PDF에
+# 그려져 있어서 MOBILE_URL을 바꿔도 따라 바뀌지 않는다 — 주소가 바뀌면 포스터 PDF를 새로 받아야 한다.
 #
 # 주소가 두 가지인 것에 주의할 것.
 #   MOBILE_URL — 자막 화면으로 바로 가는 주소(ngrok). 포스터와 홈페이지 단추가 쓴다.
@@ -39,20 +40,17 @@ from PIL import Image
 MOBILE_URL = "https://paralegal-slackness-voter.ngrok-free.dev/m"
 PAGE_URL = "https://saeroun.org/translate"
 
-CHURCH_NAME = "Saeroun Reformed Church"
-CHURCH_WEB = "www.saeroun.org"
 
 CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(HERE, "교회홈페이지")
-POSTER_HTML = os.path.join(HERE, "배포빌드", "poster.html")
 TEMPLATE = os.path.join(OUT_DIR, "_template.html")
 BULLETIN = os.path.join(OUT_DIR, "_주보안내문.html")
 DESK = os.path.join(OUT_DIR, "_안내데스크.html")
 LOGO = os.path.join(OUT_DIR, "_로고.png")
 # 홈페이지 안내 페이지 맨 위에 거는 포스터. 2026-09-29 사용자가 준 카드형 포스터(119x76mm)다.
-# 인쇄용 통역포스터.pdf(letter)는 여전히 poster.html 로 만든다 — 둘은 다른 물건이다.
+# 예배당 게시용 통역포스터.pdf(letter 가로)도 이 파일을 키워서 만든다.
 PAGE_POSTER_PDF = os.path.join(OUT_DIR, "_홈페이지포스터.pdf")
 
 
@@ -90,35 +88,29 @@ def chrome_pdf(html: str, out_pdf: str, tmp_name: str) -> None:
 
 # ── 만들기 ──────────────────────────────────────────────────────────────────
 
-def build_poster() -> Image.Image:
-    """배포빌드\\poster.html 을 그대로 그려 포스터를 만들고, 그 그림을 돌려준다.
+def build_poster() -> None:
+    """예배당 게시용 포스터 — 카드형 포스터(_홈페이지포스터.pdf)를 letter 가로로 키운다.
 
-    화면 없이 그리므로 /settings·/tunnel-url 요청은 실패한다. 로고·교회 이름·주소·QR을
-    아래 스크립트로 직접 넣어 준다. (제목과 언어 알약은 HTML 기본값이 이미 맞다)
+    그림으로 바꾸지 않고 PDF 페이지를 그대로 얹어서(show_pdf_page) 글자·QR이 벡터로
+    남는다. 크게 뽑아도 깨지지 않는다. 카드(119x76mm)와 letter 가로(279x216mm)는
+    가로세로 비율이 달라서, 가로에 맞추고 위아래는 흰 여백으로 둔다.
     """
-    with open(POSTER_HTML, "r", encoding="utf-8") as f:
-        html = f.read()
+    src = pymupdf.open(PAGE_POSTER_PDF)
+    W, H = 11 * 72, 8.5 * 72                 # letter 가로 (pt)
+    margin = 0.3 * 72                        # 프린터가 못 찍는 가장자리
+    sw, sh = src[0].rect.width, src[0].rect.height
+    k = min((W - 2 * margin) / sw, (H - 2 * margin) / sh)
+    w, h = sw * k, sh * k
+    x, y = (W - w) / 2, (H - h) / 2
 
-    inject = """
-<script>
-window.addEventListener('load', function(){
-  applyLogo(%r); applyChurch(%r); applyWeb(%r);
-  var img = document.getElementById('qr-img');
-  img.src = %r; img.style.display = 'block';
-  document.getElementById('qr-ph').style.display = 'none';
-  document.getElementById('qr-url').textContent = %r;
-});
-</script>
-</body>""" % (file_data_uri(LOGO, "image/png"), CHURCH_NAME, CHURCH_WEB,
-              qr_data_uri(MOBILE_URL, "black"), MOBILE_URL)
-
+    out = pymupdf.open()
+    page = out.new_page(width=W, height=H)
+    page.show_pdf_page(pymupdf.Rect(x, y, x + w, y + h), src, 0)
     pdf = os.path.join(OUT_DIR, "통역포스터.pdf")
-    chrome_pdf(html.replace("</body>", inject, 1), pdf, "_포스터_임시.html")
+    out.save(pdf, garbage=4, deflate=True)
 
-    doc = pymupdf.open(pdf)
-    img = Image.open(io.BytesIO(doc[0].get_pixmap(dpi=300).tobytes("png")))
+    img = Image.open(io.BytesIO(out[0].get_pixmap(dpi=300).tobytes("png")))
     img.convert("RGB").save(os.path.join(OUT_DIR, "통역포스터.jpg"), quality=88, optimize=True)
-    return img
 
 
 def poster_data_uri(img: Image.Image, width: int = 1600) -> str:
