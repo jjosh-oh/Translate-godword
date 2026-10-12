@@ -1467,12 +1467,17 @@ async def _gemini_live_loop(src_code, audio_q, stop_flag, out_q, api_key):
     둘이 되면 같은 audio_q를 두 스레드가 나눠 먹어 음성이 새 세션에 안 간다.
     """
     import asyncio
+    import time as _time
+    from array import array
+    from collections import deque
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
     aq = asyncio.Queue()
     loop = asyncio.get_event_loop()
+    # 세션을 갈아탈 때 옛 세션에 안 보낸 조각. 새 세션이 이것부터 보낸다.
+    carry = []
 
     def feeder():
         while not stop_flag["stop"]:
@@ -1493,17 +1498,50 @@ async def _gemini_live_loop(src_code, audio_q, stop_flag, out_q, api_key):
             language_hints=types.LanguageHints(language_codes=[src_code])),
     )
 
+    # 세션은 10분을 못 넘긴다. 2026-10-11 실측: 연결 9분에 GoAway(50초 남음)가 오고
+    # 9분 50초에 서버가 끊는다(1008). 그냥 끊기게 두면 말하던 문장이 반으로 갈리고
+    # 남은 글자가 버려졌다("부부가 서로를 알듯이 가족이 서로를 알듯이").
+    # 그래서 GoAway를 받으면 말이 잠깐 쉬는 자리를 찾아 우리가 먼저 갈아탄다.
+    # 쉼에서 갈아타면 옛 세션이 마지막으로 받은 게 침묵이라 잃는 말이 없다.
+    # 쉼은 '직전 6초 말소리(상위 20%)의 15% 아래로 0.43초' — 설교 40분 녹음의
+    # 40개 지점에서 38곳을 찾았고 중앙 1.5초·최대 20초 걸렸다. 못 찾으면 35초 뒤 그냥 갈아탄다.
+    RENEW_AFTER = 530      # GoAway가 안 와도 이 초가 지나면 갈아탈 준비
+    RENEW_FORCE = 35       # 준비 뒤 이 초 안에 쉼이 없으면 그냥 갈아탐
+    QUIET_RATIO = 0.15
+    QUIET_SEC = 0.43
+
     while not stop_flag["stop"]:
+        renew = {"want_at": None, "reason": ""}
         try:
             async with client.aio.live.connect(
                     model="gemini-3.5-transcribe-live", config=config) as session:
+                connected_at = _time.monotonic()
                 out_q.put(("stream_start", ""))
 
                 async def sender():
+                    levels = deque(maxlen=70)   # 약 6초(조각 85ms)
+                    quiet_sec = 0.0
                     while not stop_flag["stop"]:
-                        chunk = await aq.get()
+                        chunk = carry.pop(0) if carry else await aq.get()
                         if chunk is None:
                             break
+                        samples = array("h", chunk[:len(chunk) // 2 * 2])
+                        level = (sum(s * s for s in samples) / max(1, len(samples))) ** 0.5
+                        now = _time.monotonic()
+                        if renew["want_at"] is None and now - connected_at > RENEW_AFTER:
+                            renew["want_at"] = now
+                        if renew["want_at"] is not None and len(levels) >= 20:
+                            ref = sorted(levels)[int(len(levels) * 0.8)]
+                            quiet_sec = quiet_sec + len(samples) / 16000 if level < ref * QUIET_RATIO else 0.0
+                            if quiet_sec >= QUIET_SEC or now - renew["want_at"] > RENEW_FORCE:
+                                renew["reason"] = "쉼에서" if quiet_sec >= QUIET_SEC else "쉼을 못 찾아 시간으로"
+                                carry.append(chunk)
+                                # 보낸 소리를 마저 글자로 바꿀 시간을 준다. 그동안 들어오는
+                                # 소리는 aq에 쌓였다가 새 세션으로 간다.
+                                await session.send_realtime_input(audio_stream_end=True)
+                                await asyncio.sleep(1.5)
+                                return
+                        levels.append(level)
                         await session.send_realtime_input(
                             audio=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000"))
                     await session.send_realtime_input(audio_stream_end=True)
@@ -1511,6 +1549,8 @@ async def _gemini_live_loop(src_code, audio_q, stop_flag, out_q, api_key):
                 async def receiver():
                     prev_text = ""
                     async for response in session.receive():
+                        if getattr(response, "go_away", None) and renew["want_at"] is None:
+                            renew["want_at"] = _time.monotonic()
                         # 말이 멈췄다는 신호. V1의 SPEECH_ACTIVITY_END와 같은 자리다.
                         # 이게 없으면 남은 자막이 시간 강제 끊기까지 기다려서
                         # 문장 사이가 10초까지 벌어진다(실측).
@@ -1555,10 +1595,19 @@ async def _gemini_live_loop(src_code, audio_q, stop_flag, out_q, api_key):
                     {send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED)
                 for task in pending:
                     task.cancel()
+            if renew["reason"] and not stop_flag["stop"]:
+                _log_diag("gemini_renew", "Gemini 세션 갱신 — %s (연결 후 %d초)"
+                          % (renew["reason"], _time.monotonic() - connected_at), min_gap=0)
         except Exception as e:
             out_q.put(("error", "gemini_live: " + str(e)[:110]))
             if not stop_flag["stop"]:
+                _log_diag("gemini_error", "Gemini 연결 오류 — " + str(e)[:150])
                 await asyncio.sleep(1.0)
+        # 세션이 어떻게 끝났든 다음 세션의 stream_start가 문장 끊기를 새로 만들기 전에
+        # 남은 글자를 내보낸다. 안 그러면 말하던 문장의 뒷부분이 버려진다.
+        # (마이크를 끈 경우는 예전대로 둔다)
+        if not stop_flag["stop"]:
+            out_q.put(("speech_end", ""))
     out_q.put(None)
 
 
